@@ -1,0 +1,4 @@
+interface:
+  display_name: "Knobyte Relay"
+  short_description: "Hand off context, progress, and next actions"
+  default_prompt: "Use $knobyte-relay to package what we did and what comes next as a handoff."

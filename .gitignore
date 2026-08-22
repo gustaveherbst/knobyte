@@ -1,0 +1,11 @@
+target/
+**/*.rs.bk
+Cargo.lock
+
+# Knobyte local rebuildable indexes
+.knobyte/
+.knobyte/graph.db*
+.knobyte/wiki.db*
+.knobyte/cozo.db*
+.knobyte/local/
+

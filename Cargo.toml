@@ -1,0 +1,91 @@
+[package]
+name = "knobyte"
+version = "0.9.3"
+edition = "2021"
+description = "Shared project memory, code graphs, and local vector search for engineers and their coding agents"
+authors = ["Knobyte Team"]
+license = "AGPL-3.0-only"
+
+[dependencies]
+# CLI
+clap = { version = "4.5", features = ["derive", "cargo"] }
+
+# Async runtime & Web server / SSE
+tokio = { version = "1.43", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+axum = { version = "0.8", features = ["tokio", "macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+async-stream = "0.3"
+futures-util = "0.3"
+
+# SQLite with FTS5
+rusqlite = { version = "0.33", features = ["bundled", "bundled-full"] }
+
+# CozoDB (Graph & Vector Datalog Engine) with pure-Rust Sled storage
+cozo = { version = "0.7.6", default-features = false, features = ["storage-sled", "graph-algo"] }
+ndarray = "0.15"
+# Used by src/cozo/sled_store.rs (Cozo custom storage engine; same versions as cozo's own)
+sled = "0.34.7"
+miette = "5.5"
+
+# AST Parsing (Tree-sitter)
+tree-sitter = "0.25"
+tree-sitter-rust = "0.24"
+tree-sitter-typescript = "0.23"
+tree-sitter-javascript = "0.25"
+tree-sitter-python = "0.25"
+tree-sitter-c-sharp = "0.23"
+tree-sitter-swift = "0.7"
+
+# Serialization & Formats
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# Hashing & Crypto
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+uuid = { version = "1.13", features = ["v4", "serde"] }
+
+# File system & utilities
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1.11"
+ignore = "0.4"
+walkdir = "2.5"
+colored = "3.0"
+
+# Logging & Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+indicatif = "0.18.6"
+
+# Local neural embeddings (Model2Vec static embeddings, pure-Rust tokenizer regex backend)
+model2vec-rs = { version = "0.3", default-features = false }
+tokenizers = { version = "0.21", default-features = false, features = ["fancy-regex"] }
+safetensors = "0.5"
+
+# HTTPS client for explicit `knobyte cozo model pull` downloads (rustls, bundled webpki roots)
+ureq = { version = "2", default-features = false, features = ["tls"] }
+
+# Terminal dashboard (`knobyte tui`)
+ratatui = "0.29"
+
+[target.'cfg(unix)'.dependencies]
+# Process-group signalling for agent sessions launched by setup/sync
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3.17"
+
+# Debug builds: the vector index (cozo's HNSW), its storage and the bundled SQLite dominate
+# graph sync and test time when unoptimised; optimise just these dependencies.
+[profile.dev.package.cozo]
+opt-level = 3
+
+[profile.dev.package.sled]
+opt-level = 3
+
+[profile.dev.package.libsqlite3-sys]
+opt-level = 3
