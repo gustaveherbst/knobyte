@@ -70,6 +70,7 @@ Without `--preview` or `--apply` a mutation previews and applies in one step.
 | `KNOBYTE_HOME` | Per-user directory (default `~/.knobyte`): Hub fleet registry `projects.json` and default model directory |
 | `KNOBYTE_MODELS_DIR` | Where `cozo model pull` stores Model2Vec models (default `$KNOBYTE_HOME/models`) |
 | `KNOBYTE_NO_AGENT_LAUNCH` | Set to `1` to make `setup` and `sync` never launch an agent CLI |
+| `KNOBYTE_APPLICATIONS_DIR` | Directory `setup` searches for app bundles when detecting AI tools (default `/Applications` on macOS; empty disables the lookup) |
 | `KNOBYTE_HUB_TOKEN` | Access token required by the Hub (same as `hub --token`) |
 | `KNOBYTE_MCP_TOKEN` | Bearer token required by the MCP HTTP server (same as `mcp --token`) |
 | `KNOBYTE_MCP_PROFILE` | MCP tool profile: `core`, `team`, `wiki`, `graph` or `full` (overridden by `mcp --profile`; overrides `mcp.profile` in `.knobyte/config.json`) |
@@ -92,7 +93,7 @@ Without `--preview` or `--apply` a mutation previews and applies in one step.
 | [`knobyte cozo model pull`](#knobyte-cozo-model-pull) | Download a Model2Vec model from Hugging Face into ~/.knobyte/models (explicit only) |
 | [`knobyte cozo model status`](#knobyte-cozo-model-status) | Show the active embedding backend, model path, dimension and index state |
 | [`knobyte cozo model use`](#knobyte-cozo-model-use) | Select the embedding backend (hashed \| model2vec), saved in .knobyte/config.json |
-| [`knobyte setup`](#knobyte-setup) | Set up Knobyte project memory: scaffold, AI tool anchors, skills, graph, population |
+| [`knobyte setup`](#knobyte-setup) | Set up Knobyte project memory: detect AI tools, scaffold, wire tools (instructions, skills, MCP), index, populate, finalize |
 | [`knobyte init`](#knobyte-init) | Print a pre-analysed brief of the repository (manifests, entry points, folders, tooling) |
 | [`knobyte update`](#knobyte-update) | Refresh Knobyte-owned scaffold files and managed blocks without touching populated content |
 | [`knobyte check`](#knobyte-check) | Check project memory drift against current codebase |
@@ -393,7 +394,7 @@ Options:
 
 ## `knobyte setup`
 
-Set up Knobyte project memory: scaffold, AI tool anchors, skills, graph, population
+Set up Knobyte project memory: detect AI tools, scaffold, wire tools (instructions, skills, MCP), index, populate, finalize
 
 ```text
 Usage: knobyte setup [OPTIONS]
@@ -401,10 +402,14 @@ Usage: knobyte setup [OPTIONS]
 Options:
       --dry-run            Show what would happen without making changes
       --mode <MODE>        code-repo, agent-memory, monorepo or docs-only (default: the saved mode, else code-repo)
-      --cli                Run the interactive terminal flow (tool menu, confirmations)
-      --tools <TOOLS>      AI tools to configure: claude, cursor, windsurf, copilot, opencode, codex (comma separated, or none)
-      --launch-agent       Launch Claude Code / Codex to populate the scaffold without asking (explicit consent)
-      --no-agent           Never launch an agent; print the population prompt instead
+      --cli                Run the interactive terminal flow (tool confirmation, agent launch, commit)
+      --tools <TOOLS>      AI tools to configure: claude, cursor, windsurf, copilot, opencode, codex (comma separated, or none). Default: the tools detected on this machine
+      --no-mcp             Do not register Knobyte's MCP server with the selected tools
+      --global-mcp         Also write user-level MCP configuration (Windsurf: ~/.codeium/windsurf/mcp_config.json)
+      --launch-agent       Launch Claude Code / Codex to populate the docs without asking (explicit consent)
+      --no-agent           Never launch an agent; the docs stay marked "to fill" for the first agent session
+      --finish             After the docs are populated: re-scan, finalize, capture grounding baselines, report
+      --print-prompt       Print the population prompt (to paste into any agent) and exit
       --agent <AGENT>      Agent to launch: claude or codex (default: first selected tool that is installed)
       --skip-graph         Do not build the code graph
       --commit             Create the commit checkpoint without asking
@@ -2745,6 +2750,7 @@ Options:
       --stdio              Speak MCP over stdin/stdout instead of HTTP (for clients that spawn the server)
       --token <TOKEN>      Bearer token required by the MCP server (exported as KNOBYTE_MCP_TOKEN)
       --profile <PROFILE>  Tool profile to list (default core; overrides KNOBYTE_MCP_PROFILE and mcp.profile in .knobyte/config.json) [possible values: core, team, wiki, graph, full]
+      --root <DIR>         Project directory to serve (default: the working directory)
   -h, --help               Print help
 ```
 

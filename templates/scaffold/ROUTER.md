@@ -24,6 +24,8 @@ last_updated: {{TODAY}}
 ---
 
 <!-- knobyte:populate -->
+> **Population pending.** This file still holds Knobyte's template. Fill every `.knobyte/` file that carries the populate marker from the code (`knobyte setup --print-prompt` prints the full instructions), delete this note and the marker, then run `knobyte setup --finish`.
+
 # Session Bootstrap
 
 If you have not already read `AGENTS.md`, read it now: it holds the project identity, non-negotiables, and commands.

@@ -6,7 +6,8 @@ Official Website: **[https://knobyte.ai](https://knobyte.ai)**
 
 This guide builds Knobyte, sets it up in a repository, populates the project memory, and runs a
 first drift check. Every output shown here comes from a real run on a three-file Rust project
-(`src/main.rs`, `src/auth.rs`, `src/password.rs`). Absolute paths and hashes are shortened.
+(`src/main.rs`, `src/auth.rs`, `src/password.rs`) on a machine with the Claude Code CLI and Cursor
+installed. Absolute paths and hashes are shortened.
 
 ---
 
@@ -61,53 +62,96 @@ There is no npm package. Install from source or copy the binary onto your `PATH`
 
 ## 2. Set up a repository
 
-Run setup from the repository root. `--dry-run` lists everything it would create without writing:
+Run setup from the repository root. It is one command; your input is two or three keystrokes:
 
 ```bash
-knobyte setup --dry-run
-knobyte setup --tools claude,codex
+knobyte setup
 ```
 
-`--tools` chooses which agent integrations to write. The choices are `claude`, `codex`, `cursor`,
-`windsurf`, `copilot` and `opencode`, comma separated, or `none`. Without `--tools`, setup uses
-the tools saved in `.knobyte/config.json`, then asks (with `--cli`), and otherwise defaults to
-Claude Code. [Agent integration](agent-integration.md) lists the files each tool gets.
-
 ```text
-[info] Detected: existing codebase with source files; populate the scaffold from code
+[info] Detected: existing codebase with source files
 
-Creating the .knobyte/ scaffold...
+Scaffold
 [ok] Created .knobyte/config.json (project configuration (mode: code-repo))
 [ok] Created .knobyte/.gitignore (ignore derived databases and checkout-local state)
-[ok] Created .knobyte/AGENTS.md (always-loaded project anchor)
-[ok] Created .knobyte/ROUTER.md (session bootstrap and routing table)
-[ok] Created .knobyte/SETUP.md (manual population guide)
-[ok] Created .knobyte/SYNC.md (drift repair guide)
-[ok] Created .knobyte/context/architecture.md (architecture overview (kb_architecture))
-[ok] Created .knobyte/context/stack.md (technology stack (kb_stack))
-[ok] Created .knobyte/context/conventions.md (coding conventions (kb_conventions))
-[ok] Created .knobyte/context/decisions.md (decision log (kb_decisions))
-[ok] Created .knobyte/context/setup.md (development setup (kb_setup))
-[ok] Created .knobyte/patterns/README.md (pattern format guide)
-[ok] Created .knobyte/patterns/INDEX.md (pattern index)
+[ok] Created 11 scaffold documents in .knobyte/
 
 AI tools
-
-Installing Knobyte agent skills...
+[info] Detected:
+    Claude Code      claude on PATH
+    Cursor           Cursor.app
+Set up Knobyte for Claude Code, Cursor? [Y/n/e = edit list]
+[ok] Created .cursorrules
 [ok] Install the knobyte-inbox skill at .claude/skills/knobyte-inbox.
 [ok] Install the knobyte-relay skill at .claude/skills/knobyte-relay.
 [ok] Create CLAUDE.md with the managed Knobyte instruction block.
-[ok] Install the knobyte-inbox skill at .agents/skills/knobyte-inbox.
-[ok] Install the knobyte-relay skill at .agents/skills/knobyte-relay.
-[ok] Create AGENTS.md with the managed Knobyte instruction block.
-[info] Start a new agent session so the new skills and project instructions are loaded.
-[info] Scanning codebase...
-[ok] Pre-analysis complete; the agent will reason from the brief instead of exploring
-[info] Building code graph...
-[ok] Code graph ready
+[ok] Created .mcp.json (Knobyte MCP server for Claude Code)
+[ok] Created .cursor/mcp.json (Knobyte MCP server for Cursor)
 
-Populating the scaffold...
+Indexing
+  [1/4] scan          3 source files (1.3 KB)
+  [2/4] code graph    3 files, 11 symbols, 26 edges
+  [3/4] vector index  14 code nodes (hashed-v1, 128-dim)
+  [4/4] wiki index    11 entities
+
+Population
+[info] Not launching Claude Code: agent launch is disabled by KNOBYTE_NO_AGENT_LAUNCH.
+[info] Population pending: the docs keep their "to fill" markers. Your first agent session sees them (its Knobyte instructions say so), fills the docs from the code and runs `knobyte setup --finish`.
+[info] To populate by hand instead: `knobyte setup --print-prompt` prints the full prompt.
+
+Finalizing
+[ok] Wiki index ready with 11 entities; baselines are captured by `knobyte setup --finish` once the docs are populated
+
+Setup summary
+  Tools           Claude Code: CLAUDE.md, skills, .mcp.json (MCP)
+                  Cursor: .cursorrules, .cursor/mcp.json (MCP)
+  Code graph      3 files, 11 symbols, 26 edges
+  Vector index    ready (hashed-v1, 128-dim): 14 code nodes, 11 wiki pages
+  Docs            11 created, 0/7 populated (population pending: your first agent session finishes it)
+  Wiki index      11 entities, 0 grounding baseline(s) captured
+  Drift score     100/100
+  Central symbol  login (src/auth.rs, used from 1 file)
+
+Try asking your agent: "Use Knobyte to explain how login works."
+
+Commit
+Commit Knobyte's files now (staging only Knobyte's paths, nothing is pushed)? [y/N]
+[info] Nothing was staged or committed. To commit Knobyte's files later:
+    git add -- .knobyte CLAUDE.md .claude/skills/knobyte-inbox .claude/skills/knobyte-relay .cursorrules .mcp.json .cursor/mcp.json
+    git commit -m "chore: initialize Knobyte project memory"
 ```
+
+(This run had agent launching turned off with `KNOBYTE_NO_AGENT_LAUNCH=1`, so it shows the path
+where nobody populates the docs yet. With launching allowed, the Population step instead shows
+the launch preview and asks one more question; see [section 3](#3-populate-the-memory).)
+
+What happened, step by step:
+
+1. **Detection.** Setup looks for agent CLIs on `PATH` (`claude`, `codex`, `cursor`, `windsurf`,
+   `code` / `code-insiders` for Copilot, `opencode`), app bundles in `/Applications`, user
+   configuration directories (`~/.claude`, `~/.codex`, `~/.cursor`, `~/.codeium/windsurf`,
+   `~/.config/opencode`) and project directories (`.claude`, `.cursor`, `.vscode`, `.windsurf`,
+   `.opencode`). It shows what it found once: Enter accepts, `n` writes no tool files, `e` edits
+   the list. Without a terminal it uses the detected list. When nothing is detected it writes
+   `AGENTS.md` and `CLAUDE.md`, which most agents read, and says so.
+2. **Wiring.** Each tool gets its instruction file, the Claude Code and Codex skills, and the
+   Knobyte MCP server (`knobyte mcp --stdio --profile core`) in the tool's own configuration
+   file. Existing files are merged, never overwritten. Windsurf's MCP file lives in your home
+   directory, so setup asks before touching it (or takes `--global-mcp`).
+   [Agent integration](agent-integration.md) lists every file.
+3. **Indexing**, in one display: the scan, the code graph, the vector index (code and wiki
+   embeddings with the configured backend; the default `hashed` backend needs no download) and
+   the wiki search index.
+4. **Population** (next section), then **finalizing**, the **summary** with a first question
+   for your agent, and the **commit**, which is always the last question and defaults to no.
+
+Options you may want:
+
+- `--tools claude,codex` chooses the tools yourself (`claude`, `codex`, `cursor`, `windsurf`,
+  `copilot`, `opencode`, or `none`); it overrides detection and the saved `aiTools`.
+- `--no-mcp` skips MCP registration; `--global-mcp` allows the user-level Windsurf file.
+- `--dry-run` lists everything setup would write.
+- `--commit` commits Knobyte's files without asking.
 
 Setup also creates the empty team directories (`events/`, `team/members/`, `workstreams/`,
 `specs/`, `inbox/`, `relays/`, `topics/`, `local/`). If the repository already has a root
@@ -132,61 +176,81 @@ The new context files are templates. Each one starts with a `<!-- knobyte:popula
 An agent fills them from the code graph, with readable groundings (`kind:path:qualified_name`)
 for the claims that depend on specific code.
 
-You decide whether to launch the agent:
+**Launch an agent during setup.** When the Claude Code or Codex CLI is installed and you run
+setup in a terminal, setup shows the exact command, the working directory and the pre-approved
+read-only `knobyte` commands, then asks `Launch Claude Code to populate the docs now? [Y/n]`.
+`--launch-agent` launches without the question (your explicit consent). When the agent
+finishes, setup continues straight to finalizing in the same run.
 
-- **Interactive terminal:** setup shows the exact command, the working directory and the
-  pre-approved read-only `knobyte` commands. It then asks
-  `Launch <tool> to populate the scaffold now? [Y/n]`.
-- **`--launch-agent`:** launches without the question. This flag is your explicit consent.
-- **`--no-agent`, a non-interactive shell, `CI`, or `KNOBYTE_NO_AGENT_LAUNCH=1`:** setup only
-  prints the population prompt for you to paste into your agent:
-
-```text
-Almost done. One more step: populate the scaffold.
-[info] Paste the prompt below into your AI tool. The agent will read your codebase and fill every scaffold file.
-
-------------------------- COPY BELOW THIS LINE -------------------------
-
-You are going to populate the Knobyte project-memory scaffold for this project.
-The scaffold lives in the .knobyte/ directory.
-...
-------------------------- COPY ABOVE THIS LINE -------------------------
-
-[info] Setup paused at population. After the agent finishes, rerun `knobyte setup` to capture groundings and build the wiki index.
-```
-
-When the agent has finished and the markers are gone, run `knobyte setup` again. It keeps
-everything that was authored and finishes setup (a checkout-local marker,
-`.knobyte/local/setup-pending`, tells it that this run completes a paused setup, so it
-captures the grounding baselines):
+**Or let your first agent session do it.** With `--no-agent`, in a non-interactive shell, in
+`CI`, with `KNOBYTE_NO_AGENT_LAUNCH=1`, or when you answer no, setup does not wait. It finishes
+everything else and leaves the markers. Every place your agent reads at the start of a session
+says what to do next: the managed block in `CLAUDE.md` / `AGENTS.md`, the tool rule files, a
+"Population pending" note in `.knobyte/AGENTS.md` and `ROUTER.md`, and the MCP server's
+instructions and `knobyte_session_start`. The agent fills the files (the full prompt is
+`knobyte setup --print-prompt`), removes the markers, and runs:
 
 ```text
-[info] Detected: existing codebase with a populated scaffold; preserve authored files and finish setup
-...
-Finishing setup from the existing populated scaffold...
-Finalizing...
+$ knobyte setup --finish
+[info] Detected: existing codebase with a populated scaffold
+[info] Finishing setup: re-scan, finalize, capture grounding baselines, report
+
+Scaffold
+[info] Scaffold is up to date; existing files were preserved
+
+AI tools
+[info] Using configured AI tools: Claude Code, Cursor
+[info] .cursorrules already points at .knobyte/; left unchanged
+[info] Agent skills and instruction blocks are up to date
+[info] .mcp.json already registers the Knobyte MCP server (Claude Code)
+[info] .cursor/mcp.json already registers the Knobyte MCP server (Cursor)
+
+Indexing
+  [1/4] scan          3 source files (1.3 KB)
+  [2/4] code graph    3 files, 11 symbols, 26 edges
+  [3/4] vector index  14 code nodes (hashed-v1, 128-dim)
+  [4/4] wiki index    11 entities
+
+Finalizing
 [ok] Captured 3 grounding baseline(s)
 [ok] Wiki ready with 11 indexed entities
-Commit checkpoint
-[info] Review the scoped files, then commit them:
-[info] Knobyte did not stage or commit anything.
+
+Setup summary
+  Tools           Claude Code: CLAUDE.md, skills, .mcp.json (MCP)
+                  Cursor: .cursorrules, .cursor/mcp.json (MCP)
+  Code graph      3 files, 11 symbols, 26 edges
+  Vector index    ready (hashed-v1, 128-dim): 14 code nodes, 11 wiki pages
+  Docs            7/7 populated
+  Wiki index      11 entities, 3 grounding baseline(s) captured
+  Drift score     100/100
+  Central symbol  login (src/auth.rs, used from 1 file)
+
+Try asking your agent: "Use Knobyte to explain how login works."
+
+Commit
+[info] Nothing was staged or committed. To commit Knobyte's files later:
+    git add -- .knobyte CLAUDE.md .claude/skills/knobyte-inbox .claude/skills/knobyte-relay .cursorrules .mcp.json .cursor/mcp.json
+    git commit -m "chore: initialize Knobyte project memory"
 ```
 
-Capturing baselines writes each grounding's `body_hash` and `fingerprint` into the Markdown, so
-the baselines are committed with the documentation:
+A checkout-local marker, `.knobyte/local/setup-pending`, tells `--finish` (or a plain re-run)
+that it completes a fresh setup, so it captures the grounding baselines. Until then,
+`knobyte check` lists each marked file as `POPULATION_PENDING` information, which does not lower
+the drift score.
 
-```yaml
-grounds_to:
-  - ref: function:src/auth.rs:validate_token
-    body_hash: a7813b11c6d6…
-    fingerprint: mh1:20:05b1fbf5…
-```
+Capturing baselines writes each grounding's hash into the Markdown, so the baselines are
+committed with the documentation:
 
 ```markdown
-<!-- kb-ground: function:src/password.rs:verify_password #94689e58f48a… -->
+<!-- kb-ground: function:src/auth.rs:validate_token #5e9293d6b839… -->
 ```
 
+Frontmatter `grounds_to` entries get `body_hash` and `fingerprint` fields the same way.
+
 Setup never commits unless you pass `--commit` or confirm the prompt, and it never pushes.
+
+The [Project Hub](hub.md) runs the same flow in the browser: `knobyte` on a repository without a
+scaffold opens its Setup page.
 
 ---
 
@@ -195,7 +259,7 @@ Setup never commits unless you pass `--commit` or confirm the prompt, and it nev
 ```text
 $ knobyte check
 Drift score: 100/100 — 0 errors, 0 warnings, 0 info
-12 files checked
+13 files checked
 Groundings: 100.0% intact (3 intact, 0 changed, 0 moved, 0 ambiguous, 0 gone, 0 unverified of 3)
 graph fresh
 [ok] All scaffold files pristine and in sync with codebase.
@@ -217,8 +281,8 @@ ok Embeddings  hashed (128-dim)
 ok Config      config.json loaded (mode: code-repo, git: yes)
 ```
 
-Commit `.knobyte/`, the agent files and `CLAUDE.md` / `AGENTS.md`. The databases and `local/`
-are already git-ignored.
+Commit `.knobyte/`, the agent files, `CLAUDE.md` / `AGENTS.md` and the project MCP files (setup's
+commit question does exactly that). The databases and `local/` are already git-ignored.
 
 ---
 
@@ -284,26 +348,36 @@ knobyte member current        # Current member: Sam Lee (sam) via git-alias
 knobyte member select <id>    # or: knobyte member add <id> --select
 ```
 
-The canonical files arrive through Git. Each checkout builds its own `graph.db`, `wiki.db` and
-`cozo.db`. On a scaffold that is already populated, `knobyte setup` does not modify tracked
-files: it creates missing directories, rebuilds the code graph and the wiki index, and reports
-instead of writing.
+The canonical files arrive through Git, including the project MCP files, so your agent picks up
+the Knobyte server as soon as you open the repository. Each checkout builds its own `graph.db`,
+`wiki.db` and `cozo.db`. On a scaffold that is already populated, `knobyte setup` does not modify
+tracked files: it creates missing directories, rebuilds the code graph, vector index and wiki
+index, and reports instead of writing.
 
 ```text
-[info] The scaffold is already populated: tracked files stay as they are; setup refreshes local state (graph, wiki index)
+[info] Detected: existing codebase with a populated scaffold
+[info] The scaffold is already populated: tracked files stay as they are; setup refreshes local state (graph, vectors, wiki index)
 ...
-Finalizing...
-[info] 2 groundings have no committed baseline — run `knobyte graph ground --rebaseline` to capture them
+AI tools
+[info] Using configured AI tools: Claude Code, Cursor
+[info] .cursorrules already points at .knobyte/; left unchanged
+[info] Agent skills and instruction blocks are up to date
+[info] .mcp.json already registers the Knobyte MCP server (Claude Code)
+[info] .cursor/mcp.json already registers the Knobyte MCP server (Cursor)
+...
+Finalizing
 [ok] Wiki index rebuilt with 11 entities; tracked scaffold files were not modified
 ```
 
 - Scaffold files that `knobyte update` would refresh are listed, not written.
-- Agent files (instruction blocks, skills, `aiTools`) are written only when you pass `--tools`;
-  otherwise setup reports what is missing.
+- The tools are the repository's saved `aiTools`, not the ones detected on your machine. Agent
+  files (instruction blocks, skills, MCP registrations, `aiTools`) are written only when you
+  pass `--tools`; otherwise setup reports what is missing.
 - Grounding baselines are captured only with `--capture-baselines` (or
   `knobyte graph ground --rebaseline`), which leaves Markdown changes for you to review and
   commit.
-- There is no commit checkpoint on a re-run.
+- There is no commit question on a re-run (unless you pass `--tools`, `--finish` or
+  `--capture-baselines`).
 
 ---
 

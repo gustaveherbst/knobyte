@@ -226,6 +226,7 @@ pub fn build_hub_app(config: KnobyteConfig, options: HubOptions) -> HubApp {
         .route("/api/setup/git-init", post(setup_wizard::git_init))
         .route("/api/setup/population/preview", post(setup_wizard::population_preview))
         .route("/api/setup/population", post(setup_wizard::start_population))
+        .route("/api/setup/population/skip", post(setup_wizard::skip_population))
         .route("/api/setup/cancel", post(setup_wizard::cancel))
         .route("/api/setup/finalize", post(setup_wizard::finalize))
         .route("/api/setup/transcript", get(setup_wizard::transcript))

@@ -16,6 +16,8 @@ pub const ANCHOR_FILES: &[(&str, &str)] = &[
     (".cursorrules", "markdown"),
     (".windsurfrules", "markdown"),
     (".github/copilot-instructions.md", "markdown"),
+    ("opencode.json", "json"),
+    // Written by Knobyte before 0.9.6.
     (".opencode/opencode.json", "json"),
 ];
 

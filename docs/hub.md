@@ -111,12 +111,19 @@ On a repository without a scaffold, the Hub opens on **Setup**. The wizard walks
 steps:
 
 1. **Initialize Git**, if needed. It asks first and commits nothing.
-2. **Set up** the scaffold, agent files, skills and code graph. This never launches an agent.
-3. **Populate.** The wizard previews the exact command, working directory and timeout. You either
-   copy the prompt into your own agent, or confirm a launch of Claude Code or Codex. The
-   confirmation dialog says the agent will edit files under `.knobyte/`. The transcript streams
-   live, and you can cancel.
-4. **Finalize:** capture grounding baselines and build the wiki index.
+2. **Set up:** the same flow as `knobyte setup`. The AI tools detected on this machine are
+   preselected (a "detected" badge shows the evidence on hover). Each selected tool gets its
+   instruction files, skills and MCP server registration (uncheck **Register the Knobyte MCP
+   server** to skip it; Windsurf's user-level file needs its own checkbox). The repository is
+   then indexed: scan, code graph, vector index and wiki index. This never launches an agent;
+   the run shows which MCP files were written and the setup summary.
+3. **Populate** (optional). The wizard previews the exact command, working directory and
+   timeout. You confirm a launch of Claude Code or Codex, copy the prompt into your own agent,
+   or choose **Continue without populating**: the docs stay marked to fill and your first agent
+   session completes them and runs `knobyte setup --finish`. The confirmation dialog says the
+   agent will edit files under `.knobyte/`. The transcript streams live, and you can cancel.
+4. **Finalize** (after population): capture grounding baselines, refresh the wiki and vector
+   indexes, and show the summary with a first question to ask your agent.
 5. **Commit:** review the exact files and per-file diffs, then commit only those. The default
    message is `chore: initialize Knobyte project memory`. The review is refused if any file
    changed since you looked. Nothing is pushed.

@@ -173,7 +173,11 @@ Knobyte Agent Operating Rules:\n\
 fn dispatch(req: JsonRpcRequest, id: Option<Value>, config: &KnobyteConfig, profile: McpProfile) -> JsonRpcResponse {
     match req.method.as_str() {
         "initialize" => {
-            let instructions = server_instructions(profile);
+            let mut instructions = server_instructions(profile);
+            if let Some(hint) = crate::setup::population_hint(config) {
+                instructions.push_str("\n\n");
+                instructions.push_str(&hint);
+            }
 
             let result = json!({
                 "protocolVersion": negotiate_protocol_version(req.params.as_ref()),

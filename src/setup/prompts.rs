@@ -6,7 +6,7 @@
 
 use crate::setup::ProjectState;
 
-const POPULATE_RULE: &str = "Every scaffold file you fill starts with a `<!-- knobyte:populate -->` marker comment. Remove that marker from a file once it holds real content (keep it on any file you could not fill). Setup only finalizes once AGENTS.md, ROUTER.md and every context/ file is free of the marker. Set `last_updated` to today's date in every file you change, and keep each file's existing frontmatter keys (`id`, `title`, `type`, `summary`, `status`, `revision`).";
+const POPULATE_RULE: &str = "Every scaffold file you fill starts with a `<!-- knobyte:populate -->` marker comment. Remove that marker (and the \"Population pending\" note below it in AGENTS.md and ROUTER.md) from a file once it holds real content (keep both on any file you could not fill). Setup only finalizes once AGENTS.md, ROUTER.md and every context/ file is free of the marker; when they are, run `knobyte setup --finish` to capture grounding baselines and refresh the indexes. Set `last_updated` to today's date in every file you change, and keep each file's existing frontmatter keys (`id`, `title`, `type`, `summary`, `status`, `revision`).";
 
 const GRAPH_GROUNDING_WORKFLOW: &str = r#"
 CODE-GRAPH WORKFLOW (use this for all implementation understanding):

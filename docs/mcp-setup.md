@@ -21,8 +21,10 @@ For clients that start Knobyte as a subprocess (Claude Desktop, Cursor, Cline an
 knobyte mcp --stdio
 ```
 
-Start it from the repository root, or set the client's working directory to it. The server serves
-the project it finds there.
+The server serves the project it finds in its working directory. Clients that start servers
+somewhere else pass the project with `--root <dir>` (Cursor and VS Code expand
+`--root ${workspaceFolder}` to the open folder). `knobyte setup` registers the server with your
+tools for you; see [Client configuration](#client-configuration).
 
 ### HTTP (Streamable HTTP and SSE)
 
@@ -85,13 +87,57 @@ $ knobyte mcp --host 0.0.0.0
 
 ## Client configuration
 
-`knobyte setup --tools …` writes agent instruction files but does not register the MCP server
-with your client. Add it yourself.
+### Automatic registration
 
-### Claude Code
+`knobyte setup` registers the stdio server, with the `core` profile, for every tool it sets up
+(detected, or chosen with `--tools`):
+
+| Client | File | Scope |
+|---|---|---|
+| Claude Code | `.mcp.json` (`mcpServers.knobyte`) | project |
+| Cursor | `.cursor/mcp.json` (`mcpServers.knobyte`, `--root ${workspaceFolder}`) | project |
+| VS Code / GitHub Copilot | `.vscode/mcp.json` (`servers.knobyte`, `"type": "stdio"`, `--root ${workspaceFolder}`) | project |
+| OpenCode | `opencode.json` (`mcp.knobyte`, `"type": "local"`) | project |
+| Codex | `.codex/config.toml` (`[mcp_servers.knobyte]`; read in trusted projects) | project |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` (`mcpServers.knobyte`, `--root <project>`) | user |
+
+The command is `knobyte` when that name on your `PATH` is the binary running setup, otherwise the
+binary's absolute path. For example, `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "knobyte": {
+      "command": "knobyte",
+      "args": ["mcp", "--stdio", "--profile", "core"]
+    }
+  }
+}
+```
+
+- Existing files are merged: only the `knobyte` entry is added or updated; other servers, keys,
+  comments and formatting stay. A file that cannot be parsed is left alone and setup prints the
+  entry to add. Re-running setup is a no-op.
+- Project files contain no secrets and are committed with the scaffold (they are in the commit
+  checkpoint).
+- The user-level Windsurf file is written only after a confirmation that names it, or with
+  `--global-mcp`; otherwise setup prints the entry.
+- On a repository that already uses Knobyte, setup without `--tools` only reports missing
+  registrations. `--no-mcp` skips registration entirely.
+
+To pick a larger profile, edit `--profile` in the entry, or set `mcp.profile` in
+`.knobyte/config.json` and drop `--profile` (see [Tool profiles](#tool-profiles)).
+
+### Claude Code by hand
 
 ```bash
-claude mcp add knobyte -- knobyte mcp --stdio
+claude mcp add knobyte --scope project -- knobyte mcp --stdio --profile core
+```
+
+### Codex by hand
+
+```bash
+codex mcp add knobyte -- knobyte mcp --stdio --profile core
 ```
 
 ### Claude Desktop
@@ -110,7 +156,7 @@ Edit `claude_desktop_config.json`: on macOS `~/Library/Application Support/Claud
 }
 ```
 
-### Cursor, Windsurf, Cline and other JSON-configured clients
+### Other JSON-configured clients
 
 Stdio:
 
@@ -165,6 +211,11 @@ On `initialize` the server sends instructions that tell the agent to:
 
 The instructions end with the active tool profile, its tool count and the other profiles. All
 six tools named above are in every profile.
+
+While the scaffold's docs still carry the `<!-- knobyte:populate -->` marker, the instructions
+add a paragraph that names the unpopulated files and asks the agent to fill them and run
+`knobyte setup --finish`. `knobyte_session_start` reports the same under `setup`
+(`population_pending`, `unpopulated_files`, `next_step`).
 
 ---
 

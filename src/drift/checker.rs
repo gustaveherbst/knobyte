@@ -431,6 +431,21 @@ pub fn run_drift_check_with(config: &KnobyteConfig, opts: &DriftCheckOptions) ->
     run("todo-fixme", todo);
     run("broken-link", links);
 
+    // Docs still marked "to fill" are pending population, not drift.
+    let pending: Vec<DriftIssue> = crate::setup::unpopulated_files_if_scaffold(config)
+        .into_iter()
+        .map(|rel| {
+            DriftIssue::new(
+                codes::POPULATION_PENDING,
+                crate::drift::types::SEVERITY_INFO,
+                ctx.rel(&config.scaffold_root.join(&rel)),
+                None,
+                "Population pending (still marked to fill); run `knobyte setup --finish` once it is populated.",
+            )
+        })
+        .collect();
+    run("population", pending);
+
     let score = compute_score(&issues) as f64;
     let status = if score >= 80.0 { "healthy" } else { "drifting" };
 

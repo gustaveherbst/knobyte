@@ -108,7 +108,7 @@ pub struct RepositoryInfo {
 /// (id, kind, usage, output, description). The path is the usage up to the first argument.
 const COMMANDS: &[(&str, &str, &str, &str, &str)] = &[
     ("init", "read", "knobyte init --json", "json", "Pre-analysed scanner brief: manifests, entry points, folders, tooling, README"),
-    ("setup", "apply", "knobyte setup [--cli] [--tools claude,cursor] [--launch-agent|--no-agent] [--dry-run]", "text", "Create the scaffold, link AI tools, install skills, build the graph, populate and finalize"),
+    ("setup", "apply", "knobyte setup [--tools claude,cursor] [--no-mcp] [--launch-agent|--no-agent] [--finish] [--dry-run]", "text", "Detect AI tools, create the scaffold, wire instructions, skills and MCP, index, populate and finalize"),
     ("update", "apply", "knobyte update [--dry-run] --json", "json", "Refresh Knobyte-owned files and managed blocks without touching populated content"),
     ("check", "read", "knobyte check --json", "json", "Drift score and issues against the code graph, filesystem and git"),
     ("sync", "apply", "knobyte sync [--dry-run] [--warnings] [--launch-agent|--print-prompt]", "text", "Relocate groundings, then repair drift with an agent or printed prompts"),
@@ -234,8 +234,8 @@ pub fn get_capabilities(config: &KnobyteConfig) -> CapabilitiesReport {
             reason: "The Knobyte scaffold is missing or incomplete.".into(),
         }),
         "needs_population" => Some(NextInitializationAction {
-            command: Some("knobyte setup --cli".into()),
-            reason: "Scaffold files still carry the populate marker; populate them and finish setup.".into(),
+            command: Some("knobyte setup --finish".into()),
+            reason: "Scaffold files still carry the populate marker: fill them from the code (`knobyte setup --print-prompt`), remove the markers, then run `knobyte setup --finish`.".into(),
         }),
         "not_git_repository" => Some(NextInitializationAction {
             command: None,

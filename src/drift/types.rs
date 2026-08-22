@@ -41,6 +41,8 @@ pub mod codes {
     pub const UNREADABLE_FILE: &str = "UNREADABLE_FILE";
     /// Knobyte-only: the scaffold directory does not exist.
     pub const SCAFFOLD_MISSING: &str = "SCAFFOLD_MISSING";
+    /// Knobyte-only: a scaffold file still carries the populate marker (informational).
+    pub const POPULATION_PENDING: &str = "POPULATION_PENDING";
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -1009,11 +1009,17 @@ pub fn execute_tool_with_config(name: &str, args: &Value, config: &KnobyteConfig
                 .collect();
             let heartbeat = check_heartbeat(config, DEFAULT_STALE_THRESHOLD_DAYS);
 
+            let pending = crate::setup::unpopulated_files_if_scaffold(config);
             pretty(&json!({
                 "project": {
                     "name": config.project_name(),
                     "mode": config.mode,
                     "root": config.project_root.display().to_string(),
+                },
+                "setup": {
+                    "population_pending": !pending.is_empty(),
+                    "unpopulated_files": pending,
+                    "next_step": crate::setup::population_hint(config),
                 },
                 "member": member,
                 "git_state": {

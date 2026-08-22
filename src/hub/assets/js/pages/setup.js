@@ -1,7 +1,10 @@
-// Setup wizard: needs_git → needs_setup → needs_population → needs_finalize
-// → needs_commit → ready. Population launches an agent only after explicit
-// confirmation and streams its transcript; the commit is reviewed file by
-// file and confirmed by the user.
+// Setup wizard: needs_git → needs_setup → needs_population (skippable) →
+// needs_finalize → needs_commit → ready. It runs the same flow as
+// `knobyte setup`: detected tools are preselected, each gets its instruction
+// files, skills and MCP registration, and the repository is indexed.
+// Population launches an agent only after explicit confirmation and streams
+// its transcript, or is left to the first agent session; the commit is
+// reviewed file by file and confirmed by the user.
 
 import { h, fill, api, post, pageHeader, card, empty, badge, statusBadge, link, enc, toast, confirmDialog, stream, errorBox, unifiedDiff, field, refreshShell, kv } from '../core.js';
 
@@ -17,12 +20,37 @@ function stepper(stage) {
     }, h('span', { class: 'step-n', 'aria-hidden': 'true', text: i < idx ? '✓' : String(i + 1) }), h('span', { text: l }))));
 }
 
+const MCP_LABEL = { created: 'created', added: 'added', updated: 'updated', unchanged: 'already registered', unparseable: 'left untouched (could not parse)', 'needs-consent': 'not written (user-level file)', failed: 'write failed' };
+
+function mcpList(mcp) {
+    if (!mcp || !mcp.length) return null;
+    return h('div', { class: 'small' }, h('strong', { text: 'MCP server registration' }),
+        h('ul', { class: 'plain' }, mcp.map(m => h('li', null,
+            h('span', { class: 'mono', text: m.path }), ' — ' + (MCP_LABEL[m.outcome] || m.outcome),
+            m.snippet ? h('details', null, h('summary', { text: 'Snippet to add by hand' }), h('pre', { class: 'body', text: m.snippet })) : null))));
+}
+
+function summaryView(sum, tryPrompt) {
+    if (!sum) return null;
+    const ix = sum.index || {};
+    const rows = [];
+    (sum.tools || []).forEach((t, i) => rows.push([i ? '' : 'Tools', t.name + ': ' + t.files.join(', ')]));
+    if (ix.graphBuilt) rows.push(['Code graph', ix.files + ' files, ' + ix.symbols + ' symbols, ' + ix.edges + ' edges']);
+    if (ix.vector && !ix.vectorError) rows.push(['Vector index', 'ready (' + ix.vector.backend + ', ' + ix.vector.dim + '-dim): ' + ix.vector.codeNodes + ' code nodes, ' + ix.vector.wikiPages + ' wiki pages']);
+    if (ix.vectorError) rows.push(['Vector index', 'unavailable: ' + ix.vectorError]);
+    rows.push(['Docs', sum.docsPopulated + '/' + sum.docsTotal + ' populated' + (sum.populationPending ? ' (population pending: your first agent session finishes it)' : '')]);
+    rows.push(['Wiki index', ix.wikiEntities + ' entities, ' + sum.baselinesCaptured + ' grounding baseline(s) captured']);
+    if (sum.driftScore != null) rows.push(['Drift score', sum.driftScore + '/100']);
+    return h('div', null, kv(rows), tryPrompt ? h('p', null, h('strong', { text: 'Try asking your agent: ' }), h('span', { class: 'mono', text: '"' + tryPrompt + '"' })) : null);
+}
+
 function runBox(run) {
     if (!run || run.status === 'idle') return null;
     return h('div', { class: 'notice ' + (run.status === 'failed' ? 'notice-error' : run.status === 'running' ? 'notice-info' : run.status === 'succeeded' ? 'notice-success' : 'notice-warning'), role: 'status' },
         statusBadge(run.status), ' ', h('strong', { text: run.message }),
         run.error ? h('div', { class: 'small', text: run.error }) : null,
-        (run.anchorNotes || []).length ? h('ul', { class: 'plain small' }, run.anchorNotes.map(n => h('li', { text: n }))) : null);
+        (run.anchorNotes || []).length ? h('ul', { class: 'plain small' }, run.anchorNotes.map(n => h('li', { text: n }))) : null,
+        mcpList(run.mcp));
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -78,7 +106,8 @@ export async function page(ctx) {
     if (stage === 'needs_finalize') return finalizeStep(body, reload);
     if (stage === 'needs_commit') return commitStep(body, st, reload);
     fill(body, card('Project memory is ready', [
-        h('p', { text: stage === 'complete' ? 'This agent-memory workspace is set up.' : 'The scaffold is populated, finalized and committed. Agents read .knobyte/ through the anchors in your AI tool files.' }),
+        h('p', { text: stage === 'complete' ? 'This agent-memory workspace is set up.' : st.populationPending ? 'Setup is finished. The docs are still marked to fill: your first agent session populates them and runs `knobyte setup --finish`.' : 'The scaffold is populated, finalized and committed. Agents read .knobyte/ through the anchors in your AI tool files and the Knobyte MCP server.' }),
+        summaryView(st.run && st.run.summary, st.run && st.run.tryPrompt),
         h('ul', { class: 'plain' },
             h('li', null, link('/', 'Open the overview')), h('li', null, link('/context', 'Explore the context graph')),
             h('li', null, link('/health', 'Check context health')), h('li', null, link('/members', 'Add your team'))),
@@ -99,26 +128,33 @@ function gitStep(body, reload) {
 
 function setupStep(body, st, reload) {
     const mode = h('select', { class: 'input', id: 'setup-mode' }, ['code-repo', 'agent-memory'].map(m => h('option', { value: m, selected: m === st.mode ? true : null, text: m })));
-    const preselect = st.configuredTools.length ? st.configuredTools : ['claude'];
+    const preselect = st.preselectedTools || [];
     const tools = h('fieldset', { class: 'tool-grid' }, h('legend', { class: 'field-label', text: 'AI tools to configure' }),
-        st.tools.map(t => h('label', { class: 'tool-choice', for: 'tool-' + t.id },
+        st.tools.map(t => h('label', { class: 'tool-choice', for: 'tool-' + t.id, title: (t.signals || []).join(', ') },
             h('input', { type: 'checkbox', id: 'tool-' + t.id, value: t.id, checked: preselect.includes(t.id) }),
             h('span', { class: 'tool-name', text: t.name }),
-            t.launchable ? badge(t.cliAvailable ? 'CLI found' : 'CLI not found', t.cliAvailable ? 'success' : 'neutral') : null)));
+            t.detected ? badge('detected', 'success') : null,
+            t.launchable && !t.detected ? badge(t.cliAvailable ? 'CLI found' : 'CLI not found', t.cliAvailable ? 'success' : 'neutral') : null)));
+    const noneDetected = !(st.detectedTools || []).length && !st.configuredTools.length;
+    const mcp = h('input', { type: 'checkbox', id: 'setup-mcp', checked: true });
+    const globalMcp = h('input', { type: 'checkbox', id: 'setup-global-mcp' });
     const skipGraph = h('input', { type: 'checkbox', id: 'setup-skip-graph' });
     const err = h('div', { role: 'alert' });
     fill(body, card('Create the scaffold', [
-        h('p', { text: 'Creates .knobyte/, links your AI tools to it, installs agent skills, scans the codebase and builds the code graph. No agent is launched in this step.' }),
+        h('p', { text: 'Creates .knobyte/, wires your AI tools to it (instructions, skills and the Knobyte MCP server), then indexes the repository: scan, code graph, vector index and wiki index. No agent is launched in this step.' }),
         field('Mode', mode, 'code-repo for a codebase; agent-memory for a persistent agent workspace.'),
+        noneDetected ? h('p', { class: 'muted small', text: 'No AI tools were detected on this machine; AGENTS.md and CLAUDE.md are preselected because most coding agents read them.' }) : null,
         tools,
+        h('label', { class: 'check', for: 'setup-mcp' }, mcp, ' Register the Knobyte MCP server with the selected tools (project files: .mcp.json, .cursor/mcp.json, .vscode/mcp.json, opencode.json, .codex/config.toml)'),
+        st.windsurfUserConfig ? h('label', { class: 'check', for: 'setup-global-mcp' }, globalMcp, ' Windsurf only: also add it to your user-level ' + st.windsurfUserConfig) : null,
         h('label', { class: 'check', for: 'setup-skip-graph' }, skipGraph, ' Skip building the code graph (build it later from Health)'),
         err,
         h('div', { class: 'action-row' }, h('button', { type: 'button', class: 'btn btn-primary', text: 'Run setup', onclick: async ev => {
             ev.currentTarget.disabled = true;
             const selected = Array.from(tools.querySelectorAll('input:checked')).map(i => i.value);
             try {
-                await post('/api/setup', { mode: mode.value, tools: selected, skipGraph: skipGraph.checked });
-                fill(body, card('Setting up…', h('div', { class: 'loading', role: 'status', text: 'Creating the scaffold, tool anchors, skills and code graph…' })));
+                await post('/api/setup', { mode: mode.value, tools: selected, skipGraph: skipGraph.checked, noMcp: !mcp.checked, globalMcp: globalMcp.checked });
+                fill(body, card('Setting up…', h('div', { class: 'loading', role: 'status', text: 'Creating the scaffold, wiring your tools and indexing the repository…' })));
                 const run = await waitForRun();
                 if (run.status === 'failed') toast(run.error || run.message, 'error'); else toast(run.message, 'success');
                 reload();
@@ -182,6 +218,13 @@ async function populationStep(body, st, reload, stops) {
                     try { await post('/api/setup/population', { tool, confirm: true }); reload(); } catch (err) { toast(err.message, 'error'); }
                 } })),
             ] : h('div', { class: 'notice notice-warning', text: 'Neither the Claude Code nor the Codex CLI is installed on PATH. Paste the prompt below into your AI tool instead.' }),
+        ]),
+        card('Or let your first agent session do it', [
+            h('p', { class: 'muted', text: 'Setup is already usable. The docs stay marked to fill; the instructions in CLAUDE.md, AGENTS.md and .knobyte/ tell your next agent session to populate them and run `knobyte setup --finish`.' }),
+            h('div', { class: 'action-row' }, h('button', { type: 'button', class: 'btn', text: 'Continue without populating', onclick: async ev => {
+                ev.currentTarget.disabled = true;
+                try { await post('/api/setup/population/skip', {}); reload(); } catch (err) { toast(err.message, 'error'); ev.target.disabled = false; }
+            } })),
         ]),
         card('Or paste the prompt yourself', [
             h('p', { class: 'muted', text: 'Paste into any AI tool that can read and edit files in this repository; when it finishes, check again.' }),

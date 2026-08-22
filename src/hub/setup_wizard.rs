@@ -1,8 +1,12 @@
-//! Browser setup wizard: readiness stages, scaffold setup with tool
-//! selection, agent-driven population with explicit confirmation and a
-//! streamed transcript, finalize, and a reviewed, user-confirmed commit.
+//! Browser setup wizard. It runs the same flow as `knobyte setup`: detected tools are
+//! preselected, each selected tool gets its instruction files, skills and MCP registration,
+//! the repository is indexed (scan, code graph, vector index, wiki index), and setup finishes
+//! even when nobody populates the docs right away. Population (an agent launched with
+//! explicit confirmation and a streamed transcript) is optional: it can be skipped, leaving
+//! the docs marked for the first agent session. Finalize captures baselines; the commit is
+//! reviewed file by file and confirmed by the user.
 //!
-//! Stages: `needs_git` → `needs_setup` → `needs_population` → `needs_finalize`
+//! Stages: `needs_git` → `needs_setup` → `needs_population` (skippable) → `needs_finalize`
 //! → `needs_commit` → `ready` (`complete` for agent-memory workspaces).
 
 use std::collections::VecDeque;
@@ -29,8 +33,13 @@ use super::problem::Problem;
 use super::HubState;
 use crate::agent::{find_on_path, preview_command, request_cancel, run_agent, AgentEvent, AgentTool, LaunchOptions};
 use crate::config::{load_ai_tools, KnobyteConfig, AI_TOOLS};
-use crate::setup::flow::{commit_checkpoint_paths, finalize_setup, parse_tool_list, run_setup_flow, SetupFlowOptions, SETUP_AGENT_TIMEOUT};
-use crate::setup::prompts::build_population_prompt;
+use crate::setup::detect::{detect_tools, home_dir, DetectEnv, FALLBACK_TOOLS};
+use crate::setup::flow::{
+    commit_checkpoint_paths, current_summary, finalize_setup, parse_tool_list, population_prompt, run_setup_flow, setup_pending,
+    SetupFlowOptions, SETUP_AGENT_TIMEOUT, SETUP_PENDING_MARKER,
+};
+use crate::setup::mcp_register::McpResult;
+use crate::setup::summary::SetupSummary;
 use crate::setup::{detect_project_state, is_scaffold_populated, resolve_setup_mode, unpopulated_files};
 
 const TRANSCRIPT_RETAINED: usize = 2048;
@@ -56,6 +65,12 @@ pub struct SetupRun {
     pub started_at: Option<String>,
     pub finished_at: Option<String>,
     pub last_commit: Option<String>,
+    /// MCP registrations written (or to add by hand) by the last setup.
+    pub mcp: Vec<McpResult>,
+    /// Proof summary of the last setup or finalize.
+    pub summary: Option<SetupSummary>,
+    /// The suggested first question for the agent.
+    pub try_prompt: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -209,14 +224,22 @@ fn fresh_config(config: &KnobyteConfig) -> KnobyteConfig {
     KnobyteConfig::new(config.project_root.clone(), config.scaffold_root.clone())
 }
 
+/// Checkout-local flag: the user chose to leave population to the first agent session.
+fn deferred_flag(config: &KnobyteConfig) -> std::path::PathBuf {
+    config.local_dir().join("hub").join("population-deferred")
+}
+
 fn has_scaffold(config: &KnobyteConfig) -> bool {
     config.scaffold_root.is_dir() && config.config_file_path().exists()
 }
 
-/// Paths the setup commit checkpoint covers.
+/// Paths the setup commit checkpoint covers (git-ignored ones are left out: staging them
+/// would make `git add` fail).
 fn checkpoint_paths(config: &KnobyteConfig) -> Vec<String> {
     let tools = load_ai_tools(&config.scaffold_root).unwrap_or_default();
-    commit_checkpoint_paths(config, &tools)
+    let paths = commit_checkpoint_paths(config, &tools);
+    let (_, ignored) = crate::setup::flow::split_ignored_paths(&config.project_root, &paths);
+    paths.into_iter().filter(|p| !ignored.contains(p)).collect()
 }
 
 /// Uncommitted changes the setup checkpoint would commit (excluding checkout-local state).
@@ -241,20 +264,34 @@ pub fn setup_status(config: &KnobyteConfig, svc: &SetupService) -> Value {
     let populated = scaffold && is_scaffold_populated(&config.scaffold_root);
     let graph_ready = config.graph_db_path().exists();
     let wiki_ready = config.wiki_db_path().exists();
-    let configured = load_ai_tools(&config.scaffold_root).unwrap_or_default();
+    let saved = load_ai_tools(&config.scaffold_root);
+    let configured = saved.clone().unwrap_or_default();
+    let detected = detect_tools(&DetectEnv::from_process(&config.project_root));
+    // Preselection: the saved choice, else the detected tools, else AGENTS.md + CLAUDE.md.
+    let preselected: Vec<String> = match &saved {
+        Some(t) => t.clone(),
+        None if !detected.is_empty() => detected.iter().map(|d| d.tool.clone()).collect(),
+        None => FALLBACK_TOOLS.iter().map(|s| s.to_string()).collect(),
+    };
     let tools: Vec<Value> = AI_TOOLS
         .iter()
         .map(|t| {
             let agent = AgentTool::parse(t);
+            let found = detected.iter().find(|d| d.tool == *t);
             json!({
                 "id": t,
                 "name": crate::setup::anchor::tool_display_name(t),
                 "selected": configured.iter().any(|c| c == t),
+                "preselected": preselected.iter().any(|c| c == t),
+                "detected": found.is_some(),
+                "signals": found.map(|d| d.signals.clone()).unwrap_or_default(),
                 "launchable": agent.is_some(),
                 "cliAvailable": agent.map(|a| svc.launchable(a)).unwrap_or(false),
             })
         })
         .collect();
+    let deferred = deferred_flag(&config).exists();
+    let pending_finish = scaffold && setup_pending(&config);
     // Setup is committed once the scaffold config is in HEAD; later team
     // records are ordinary changes, not an unfinished setup.
     let config_rel = config
@@ -268,9 +305,9 @@ pub fn setup_status(config: &KnobyteConfig, svc: &SetupService) -> Value {
         "needs_git"
     } else if !scaffold {
         "needs_setup"
-    } else if !populated {
+    } else if !populated && !deferred {
         "needs_population"
-    } else if !wiki_ready {
+    } else if !wiki_ready || (populated && pending_finish) {
         "needs_finalize"
     } else if mode != "code-repo" {
         "complete"
@@ -287,6 +324,8 @@ pub fn setup_status(config: &KnobyteConfig, svc: &SetupService) -> Value {
         "hasGit": git,
         "hasScaffold": scaffold,
         "populated": populated,
+        "populationPending": scaffold && !populated,
+        "populationDeferred": deferred,
         "unpopulatedFiles": if scaffold { unpopulated_files(&config.scaffold_root) } else { Vec::new() },
         "graphReady": graph_ready,
         "wikiReady": wiki_ready,
@@ -294,6 +333,9 @@ pub fn setup_status(config: &KnobyteConfig, svc: &SetupService) -> Value {
         "stage": stage,
         "ready": matches!(stage, "ready" | "complete"),
         "configuredTools": configured,
+        "preselectedTools": preselected,
+        "detectedTools": detected,
+        "windsurfUserConfig": home_dir().map(|h| crate::setup::mcp_register::windsurf_config_path(&h).1),
         "tools": tools,
         "pendingCommitFiles": pending.len(),
         "commitPaths": paths,
@@ -395,10 +437,17 @@ struct SetupBody {
     tools: Vec<String>,
     #[serde(default, rename = "skipGraph")]
     skip_graph: bool,
+    /// Skip MCP server registration.
+    #[serde(default, rename = "noMcp")]
+    no_mcp: bool,
+    /// Consent to write user-level MCP configuration (Windsurf).
+    #[serde(default, rename = "globalMcp")]
+    global_mcp: bool,
 }
 
-/// `POST /api/setup`: scaffold, tool anchors, skills, scan and code graph
-/// (never launches an agent; population is a separate, confirmed step).
+/// `POST /api/setup`: the `knobyte setup` flow without prompts: scaffold, tool instruction
+/// files, skills, MCP registration, indexing and finalize. Never launches an agent;
+/// population is a separate, confirmed (and skippable) step.
 pub async fn start_setup(State(state): State<HubState>, body: Bytes) -> Response {
     let b: SetupBody = match parse_body(&body) {
         Ok(b) => b,
@@ -413,7 +462,7 @@ pub async fn start_setup(State(state): State<HubState>, body: Bytes) -> Response
             return Problem::validation(e).into_response();
         }
     }
-    if let Err(p) = state.setup.begin("setup", "Creating the scaffold, tool anchors, skills and code graph...") {
+    if let Err(p) = state.setup.begin("setup", "Creating the scaffold, wiring your tools and indexing the repository...") {
         return p.into_response();
     }
     state.setup.set_run(|r| r.selected_tools = tools.clone());
@@ -432,6 +481,10 @@ pub async fn start_setup(State(state): State<HubState>, body: Bytes) -> Response
             commit: false,
             backup_skills: false,
             capture_baselines: false,
+            no_mcp: b.no_mcp,
+            global_mcp: b.global_mcp,
+            finish: false,
+            detect_env: None,
         };
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_setup_flow(&config, &opts)))
             .unwrap_or_else(|_| Err("setup panicked".into()));
@@ -441,9 +494,12 @@ pub async fn start_setup(State(state): State<HubState>, body: Bytes) -> Response
                 Ok(res) => {
                     r.status = "succeeded".into();
                     r.anchor_notes = res.anchor_notes;
+                    r.mcp = res.mcp;
+                    r.try_prompt = res.summary.as_ref().map(|s| s.try_prompt());
+                    r.summary = res.summary;
                     r.message = match res.stage {
                         crate::setup::flow::SetupStage::NeedsPopulation => {
-                            "Scaffold ready. Next: populate it with an agent (or paste the prompt).".into()
+                            "Setup finished. The docs are marked to fill: populate them with an agent now, or leave them for your first agent session.".into()
                         }
                         _ => "Setup finished.".into(),
                     };
@@ -466,17 +522,6 @@ struct PopulationBody {
     tool: Option<String>,
     #[serde(default)]
     confirm: bool,
-}
-
-fn population_prompt(config: &KnobyteConfig) -> String {
-    let mode = resolve_setup_mode(config, None).unwrap_or_else(|_| "code-repo".into());
-    let state = detect_project_state(&config.project_root, &config.scaffold_root);
-    let brief = if mode != "agent-memory" && state != crate::setup::ProjectState::Fresh {
-        serde_json::to_string_pretty(&crate::scanner::scan(&config.project_root)).ok()
-    } else {
-        None
-    };
-    build_population_prompt(&mode, state, brief.as_deref())
 }
 
 fn choose_tool(config: &KnobyteConfig, svc: &SetupService, requested: Option<&str>) -> Result<AgentTool, Problem> {
@@ -626,7 +671,36 @@ pub async fn cancel(State(state): State<HubState>) -> Response {
     Json(json!({ "cancelRequested": true, "run": run })).into_response()
 }
 
-/// `POST /api/setup/finalize`: capture grounding baselines and refresh the wiki index.
+/// `POST /api/setup/population/skip`: leave population to the first agent session (the
+/// docs keep their markers and the agent instructions ask the agent to finish them).
+pub async fn skip_population(State(state): State<HubState>) -> Response {
+    if state.setup.busy() {
+        return Problem::conflict("Wait for the running setup action to finish.").into_response();
+    }
+    blocking(move || {
+        let config = fresh_config(&state.config);
+        if !has_scaffold(&config) {
+            return Problem::conflict("Create the scaffold first.").into_response();
+        }
+        let flag = deferred_flag(&config);
+        let written = flag.parent().map(std::fs::create_dir_all).unwrap_or(Ok(())).and_then(|_| std::fs::write(&flag, "deferred\n"));
+        if let Err(e) = written {
+            return Problem::internal(e.to_string()).into_response();
+        }
+        state.setup.set_run(|r| {
+            r.action = Some("population".into());
+            r.status = "succeeded".into();
+            r.message = "Population left to your first agent session: it fills the marked docs and runs `knobyte setup --finish`.".into();
+            r.error = None;
+            r.finished_at = Some(now());
+        });
+        Json(setup_status(&state.config, &state.setup)).into_response()
+    })
+    .await
+}
+
+/// `POST /api/setup/finalize`: capture grounding baselines and refresh the wiki and vector
+/// indexes (`knobyte setup --finish`).
 pub async fn finalize(State(state): State<HubState>) -> Response {
     if let Err(p) = state.setup.begin("finalize", "Capturing grounding baselines and indexing the wiki...") {
         return p.into_response();
@@ -638,15 +712,21 @@ pub async fn finalize(State(state): State<HubState>) -> Response {
         } else if !is_scaffold_populated(&config.scaffold_root) {
             Err(format!("These files still need population: {}", unpopulated_files(&config.scaffold_root).join(", ")))
         } else {
-            finalize_setup(&config)
+            finalize_setup(&config).map(|(captured, entities)| {
+                let _ = std::fs::remove_file(config.local_dir().join(SETUP_PENDING_MARKER));
+                let _ = std::fs::remove_file(deferred_flag(&config));
+                (captured, entities, current_summary(&config, captured))
+            })
         };
         let ok = result.is_ok();
         state.setup.set_run(|r| {
             r.finished_at = Some(now());
             match &result {
-                Ok((captured, entities)) => {
+                Ok((captured, entities, summary)) => {
                     r.status = "succeeded".into();
                     r.message = format!("Finalized: {} grounding baseline(s), {} wiki entities.", captured, entities);
+                    r.try_prompt = Some(summary.try_prompt());
+                    r.summary = Some(summary.clone());
                 }
                 Err(e) => {
                     r.status = "failed".into();
@@ -752,8 +832,6 @@ pub async fn commit_preview(State(state): State<HubState>) -> Response {
             blocked = Some("This project has no git repository.".into());
         } else if !has_scaffold(&config) {
             blocked = Some("Create the scaffold first.".into());
-        } else if !is_scaffold_populated(&config.scaffold_root) {
-            blocked = Some("Populate the scaffold before committing it.".into());
         }
         let changes = if blocked.is_none() { pending_checkpoint_changes(&config) } else { Vec::new() };
         if blocked.is_none() && changes.is_empty() {

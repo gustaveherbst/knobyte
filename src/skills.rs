@@ -82,6 +82,7 @@ pub fn render_instruction_block(client: &str, eol: &str) -> String {
         SKILLS_START.to_string(),
         "## Knobyte agent skills".to_string(),
         "- At the start of every session, read `.knobyte/AGENTS.md` and `.knobyte/ROUTER.md` before project work; follow `ROUTER.md` to load only the relevant context.".to_string(),
+        "- If any `.knobyte/` file still contains a `<!-- knobyte:populate -->` marker, population is pending: before other work, fill those files from the code (run `knobyte setup --print-prompt` for the full instructions), remove each marker, then run `knobyte setup --finish`.".to_string(),
         "- Read `knobyte logging --json` at session start and before optional logging: `significant` (default: material decisions, risks, blockers, durable discoveries), `checkpoints` (batch notes at task or session boundaries) or `manual` (no unsolicited notes). Always honor explicit user log requests.".to_string(),
         "- When earlier work may inform the task, search history with `knobyte timeline` and treat matches as historical evidence, not accepted current knowledge.".to_string(),
         format!("- Use `{}` for explicit contributions to project knowledge and `{}` for durable team handoffs. Invoke them when intent clearly matches; ordinary GROW upkeep needs no Inbox.", inbox, relay),

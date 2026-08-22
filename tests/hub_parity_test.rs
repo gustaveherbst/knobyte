@@ -453,8 +453,17 @@ async fn setup_wizard_stages_population_with_fake_agent_and_reviewed_commit() {
     assert_eq!(run["status"], "succeeded", "{}", run);
     let st = c.get_json("/api/setup").await;
     assert_eq!(st["stage"], "needs_population");
+    assert_eq!(st["populationPending"], true);
     assert_eq!(st["configuredTools"], j!(["claude"]));
+    assert_eq!(st["preselectedTools"], j!(["claude"]), "the saved choice is preselected");
     assert!(root.join("CLAUDE.md").exists());
+    // Same flow as the CLI: MCP registration, indexing and a proof summary, no pause.
+    assert!(root.join(".mcp.json").exists());
+    assert!(run["mcp"].as_array().unwrap().iter().any(|m| m["path"] == ".mcp.json" && m["outcome"] == "created"), "{}", run);
+    assert_eq!(run["summary"]["populationPending"], true, "{}", run);
+    assert!(run["summary"]["index"]["wikiEntities"].as_u64().unwrap() > 0, "{}", run);
+    assert!(run["tryPrompt"].as_str().unwrap().starts_with("Use Knobyte to explain how"));
+    assert!(hub.config.local_dir().join("setup-pending").exists());
 
     // Population preview names the exact command and launches nothing.
     let pv = c.post_json("/api/setup/population/preview", "{}").await;
@@ -501,8 +510,11 @@ async fn setup_wizard_stages_population_with_fake_agent_and_reviewed_commit() {
     // The private prompt file was removed.
     assert_eq!(fs::read_dir(hub.config.local_dir().join("agent-sessions")).map(|r| r.count()).unwrap_or(0), 0);
 
-    // Finalize → needs_commit.
-    c.post_json("/api/setup/finalize", "{}").await;
+    // Finalize → needs_commit, with the proof summary.
+    let fin = c.post_json("/api/setup/finalize", "{}").await;
+    assert_eq!(fin["run"]["summary"]["populationPending"], false, "{}", fin);
+    assert!(fin["run"]["tryPrompt"].as_str().unwrap().starts_with("Use Knobyte to explain how"), "{}", fin);
+    assert!(!hub.config.local_dir().join("setup-pending").exists());
     assert_eq!(c.get_json("/api/setup").await["stage"], "needs_commit");
 
     // Commit review: per-file diffs; a change after review is refused.
@@ -532,6 +544,40 @@ async fn setup_wizard_stages_population_with_fake_agent_and_reviewed_commit() {
     // Later scaffold edits are ordinary changes, not an unfinished setup.
     fs::write(hub.config.scaffold_root.join("context/later.md"), "# Later\n").unwrap();
     assert_eq!(c.get_json("/api/setup").await["stage"], "ready");
+}
+
+/// The browser wizard does not pause at population either: skipping it leaves the docs
+/// marked for the first agent session and moves on to the commit.
+#[tokio::test]
+async fn setup_wizard_population_can_be_left_to_the_first_agent_session() {
+    let hub = Hub::bare();
+    let root = hub.root();
+    write_sources(&root);
+    git_init(&root);
+    git(&root, &["add", "-A"]);
+    git(&root, &["commit", "-qm", "init"]);
+    let c = hub.client().await;
+    let st = c.get_json("/api/setup").await;
+    assert_eq!(st["stage"], "needs_setup");
+    assert!(st["preselectedTools"].as_array().is_some_and(|t| !t.is_empty()), "{}", st);
+    assert!(st["tools"].as_array().unwrap().iter().all(|t| t.get("detected").is_some() && t.get("signals").is_some()));
+    assert_eq!(c.post("/api/setup/population/skip", "{}").await.0, StatusCode::CONFLICT, "no scaffold yet");
+
+    let (status, body) = c.post("/api/setup", r#"{"tools":["cursor","copilot"],"skipGraph":true}"#).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{}", body);
+    let run = c.poll("/api/setup/run", |v| v["status"] != "running").await;
+    assert_eq!(run["status"], "succeeded", "{}", run);
+    assert!(root.join(".cursor/mcp.json").exists() && root.join(".vscode/mcp.json").exists());
+    assert_eq!(c.get_json("/api/setup").await["stage"], "needs_population");
+
+    let st = c.post_json("/api/setup/population/skip", "{}").await;
+    assert_eq!(st["stage"], "needs_commit", "{}", st);
+    assert_eq!(st["populationPending"], true);
+    assert_eq!(st["populationDeferred"], true);
+    let review = c.post_json("/api/setup/commit/preview", "{}").await;
+    assert_eq!(review["canCommit"], true, "{}", review);
+    let files: Vec<&str> = review["files"].as_array().unwrap().iter().map(|f| f["path"].as_str().unwrap()).collect();
+    assert!(files.contains(&".cursor/mcp.json") && files.contains(&".vscode/mcp.json"), "{:?}", files);
 }
 
 #[tokio::test]

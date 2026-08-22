@@ -3,8 +3,9 @@
 use crate::drift::types::{codes, DriftIssue, SEVERITY_ERROR, SEVERITY_INFO, SEVERITY_WARNING};
 
 /// Notices that are reported but are not drift, so they cost nothing. A move decided by
-/// neighbours is a correct rebind that would otherwise be silent.
-pub const UNSCORED_CODES: &[&str] = &[codes::GROUNDING_MOVED_BY_NEIGHBORS];
+/// neighbours is a correct rebind that would otherwise be silent; docs still marked "to fill"
+/// are pending population.
+pub const UNSCORED_CODES: &[&str] = &[codes::GROUNDING_MOVED_BY_NEIGHBORS, codes::POPULATION_PENDING];
 
 /// Points deducted for one issue of `severity`.
 pub fn severity_cost(severity: &str) -> i64 {

@@ -53,7 +53,8 @@ enum Commands {
         #[command(subcommand)]
         sub: CozoCommands,
     },
-    /// Set up Knobyte project memory: scaffold, AI tool anchors, skills, graph, population
+    /// Set up Knobyte project memory: detect AI tools, scaffold, wire tools (instructions,
+    /// skills, MCP), index, populate, finalize
     Setup {
         /// Show what would happen without making changes
         #[arg(long = "dry-run")]
@@ -61,18 +62,31 @@ enum Commands {
         /// code-repo, agent-memory, monorepo or docs-only (default: the saved mode, else code-repo)
         #[arg(long)]
         mode: Option<String>,
-        /// Run the interactive terminal flow (tool menu, confirmations)
+        /// Run the interactive terminal flow (tool confirmation, agent launch, commit)
         #[arg(long)]
         cli: bool,
-        /// AI tools to configure: claude, cursor, windsurf, copilot, opencode, codex (comma separated, or none)
+        /// AI tools to configure: claude, cursor, windsurf, copilot, opencode, codex (comma
+        /// separated, or none). Default: the tools detected on this machine
         #[arg(long)]
         tools: Option<String>,
-        /// Launch Claude Code / Codex to populate the scaffold without asking (explicit consent)
+        /// Do not register Knobyte's MCP server with the selected tools
+        #[arg(long = "no-mcp")]
+        no_mcp: bool,
+        /// Also write user-level MCP configuration (Windsurf: ~/.codeium/windsurf/mcp_config.json)
+        #[arg(long = "global-mcp", conflicts_with = "no_mcp")]
+        global_mcp: bool,
+        /// Launch Claude Code / Codex to populate the docs without asking (explicit consent)
         #[arg(long = "launch-agent", conflicts_with = "no_agent")]
         launch_agent: bool,
-        /// Never launch an agent; print the population prompt instead
+        /// Never launch an agent; the docs stay marked "to fill" for the first agent session
         #[arg(long = "no-agent")]
         no_agent: bool,
+        /// After the docs are populated: re-scan, finalize, capture grounding baselines, report
+        #[arg(long, conflicts_with_all = ["launch_agent", "dry_run"])]
+        finish: bool,
+        /// Print the population prompt (to paste into any agent) and exit
+        #[arg(long = "print-prompt")]
+        print_prompt: bool,
         /// Agent to launch: claude or codex (default: first selected tool that is installed)
         #[arg(long)]
         agent: Option<String>,
@@ -294,6 +308,9 @@ enum Commands {
         /// Tool profile to list (default core; overrides KNOBYTE_MCP_PROFILE and mcp.profile in .knobyte/config.json)
         #[arg(long, value_parser = ["core", "team", "wiki", "graph", "full"])]
         profile: Option<String>,
+        /// Project directory to serve (default: the working directory)
+        #[arg(long, value_name = "DIR")]
+        root: Option<std::path::PathBuf>,
     },
     /// Create a new pattern template
     Pattern {
@@ -710,6 +727,12 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         );
         std::process::exit(2);
     }
+    // `knobyte mcp --root DIR`: MCP clients may start the server outside the project.
+    if let Some(Commands::Mcp { root: Some(root), .. }) = &cli.command {
+        if let Err(e) = std::env::set_current_dir(root) {
+            eprintln!("[knobyte mcp] cannot use --root {}: {}; serving the working directory", root.display(), e);
+        }
+    }
     let config = find_config(None).unwrap_or_else(|_| {
         let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         knobyte::config::KnobyteConfig::new(cwd.clone(), cwd.join(".knobyte"))
@@ -754,15 +777,23 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             mode,
             cli,
             tools,
+            no_mcp,
+            global_mcp,
             launch_agent,
             no_agent,
+            finish,
+            print_prompt,
             agent,
             skip_graph,
             commit,
             backup_skills,
             capture_baselines,
         }) => {
-            use knobyte::setup::flow::{parse_tool_list, run_setup_flow, SetupFlowOptions};
+            use knobyte::setup::flow::{parse_tool_list, population_prompt, run_setup_flow, SetupFlowOptions};
+            if print_prompt {
+                println!("{}", population_prompt(&config));
+                return Ok(());
+            }
             let tools = match tools.as_deref().map(parse_tool_list).transpose() {
                 Ok(t) => t,
                 Err(e) => {
@@ -782,6 +813,10 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 commit,
                 backup_skills,
                 capture_baselines,
+                no_mcp,
+                global_mcp,
+                finish,
+                detect_env: None,
             };
             match run_setup_flow(&config, &opts) {
                 Ok(_) => {}
@@ -1490,6 +1525,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             stdio,
             token,
             profile,
+            root: _,
         }) => {
             if let Some(t) = token {
                 std::env::set_var("KNOBYTE_MCP_TOKEN", t);
@@ -2052,8 +2088,9 @@ fn print_commands() {
     const SECTIONS: &[(&str, &[(&str, &str)])] = &[
         ("Setup & maintenance", &[
             ("knobyte [--port N] [--no-open]", "Launch the Project Hub (127.0.0.1:4000; guided setup if needed)"),
-            ("knobyte setup [--cli] [--tools ...] [--dry-run]", "Scaffold, AI tool anchors, skills, code graph, population, finalize"),
-            ("knobyte setup --launch-agent | --no-agent", "Launch Claude Code/Codex to populate (explicit) or print the prompt"),
+            ("knobyte setup [--tools ...] [--no-mcp] [--dry-run]", "Detect AI tools; scaffold, instructions, skills, MCP, indexes, population, finalize"),
+            ("knobyte setup --launch-agent | --no-agent", "Launch Claude Code/Codex to populate (explicit), or leave it to the first agent session"),
+            ("knobyte setup --finish", "After population: re-scan, finalize, capture baselines, report"),
             ("knobyte init [--json]", "Pre-analysed brief: manifests, entry points, folders, tooling, README"),
             ("knobyte update [--dry-run]", "Refresh Knobyte-owned files and managed blocks; populated content untouched"),
             ("knobyte skills sync [--tool claude|codex] [--backup]", "Install official agent skills without clobbering edits"),

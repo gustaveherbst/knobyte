@@ -4,8 +4,12 @@ use serde::{Deserialize, Serialize};
 use crate::config::KnobyteConfig;
 
 pub mod anchor;
+pub mod detect;
 pub mod flow;
+pub mod jsonedit;
+pub mod mcp_register;
 pub mod prompts;
+pub mod summary;
 pub mod templates;
 pub mod update;
 
@@ -284,6 +288,31 @@ pub fn unpopulated_files(scaffold_root: &Path) -> Vec<String> {
         })
         .map(|s| s.to_string())
         .collect()
+}
+
+/// Required scaffold files still carrying the populate marker; empty when there is no
+/// scaffold (nothing to populate yet) or population is complete.
+pub fn unpopulated_files_if_scaffold(config: &KnobyteConfig) -> Vec<String> {
+    if !config.scaffold_root.join("AGENTS.md").exists() && !config.scaffold_root.join("ROUTER.md").exists() {
+        return Vec::new();
+    }
+    REQUIRED_POPULATED_FILES
+        .iter()
+        .filter(|rel| fs::read_to_string(config.scaffold_root.join(rel)).map(|c| templates::needs_population(&c)).unwrap_or(false))
+        .map(|s| s.to_string())
+        .collect()
+}
+
+/// The agent-facing hint while population is pending (`None` once the docs are populated).
+pub fn population_hint(config: &KnobyteConfig) -> Option<String> {
+    let pending = unpopulated_files_if_scaffold(config);
+    if pending.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "Knobyte population is pending: {} still carry the `<!-- knobyte:populate -->` marker. Before other work, fill them from the code (run `knobyte setup --print-prompt` for the full instructions), remove each marker, then run `knobyte setup --finish`.",
+        pending.iter().map(|f| format!(".knobyte/{}", f)).collect::<Vec<_>>().join(", ")
+    ))
 }
 
 /// Whether the project has source files (searched to depth 4, skipping vendored trees).

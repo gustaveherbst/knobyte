@@ -18,16 +18,37 @@ fn bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_knobyte"))
 }
 
+/// A home directory with no AI tool configuration (tool detection never sees the real one).
+fn empty_home() -> PathBuf {
+    static HOME: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    HOME.get_or_init(|| tempdir().unwrap()).path().to_path_buf()
+}
+
+/// System directories only, so the developer's real agent CLIs are never found.
+fn system_path(extra: Option<&Path>) -> OsString {
+    let mut paths: Vec<PathBuf> = extra.map(|p| vec![p.to_path_buf()]).unwrap_or_default();
+    paths.extend(["/usr/bin", "/bin", "/usr/local/bin"].map(PathBuf::from).into_iter().filter(|p| !p.join("claude").exists() && !p.join("codex").exists()));
+    std::env::join_paths(paths).unwrap()
+}
+
 /// Run the knobyte binary in `dir` with agent launching hard-disabled unless `extra_path`
-/// supplies fake agent CLIs (prepended to PATH).
+/// supplies fake agent CLIs (prepended to PATH). HOME, PATH and the app directory are
+/// isolated so tool detection only sees what a test creates.
 fn knobyte(dir: &Path, args: &[&str], extra_path: Option<&Path>) -> std::process::Output {
+    knobyte_with(dir, args, extra_path, &empty_home())
+}
+
+fn knobyte_with(dir: &Path, args: &[&str], extra_path: Option<&Path>, home: &Path) -> std::process::Output {
     let mut cmd = Command::new(bin());
-    cmd.args(args).current_dir(dir).env("NO_COLOR", "1").env_remove("CI");
+    cmd.args(args)
+        .current_dir(dir)
+        .env("NO_COLOR", "1")
+        .env_remove("CI")
+        .env("HOME", home)
+        .env("KNOBYTE_APPLICATIONS_DIR", "")
+        .env("PATH", system_path(extra_path));
     match extra_path {
-        Some(p) => {
-            let mut paths = vec![p.to_path_buf()];
-            paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
-            cmd.env("PATH", std::env::join_paths(paths).unwrap());
+        Some(_) => {
             cmd.env_remove("KNOBYTE_NO_AGENT_LAUNCH");
         }
         None => {
@@ -227,7 +248,9 @@ fn fresh_setup_scores_100_and_is_idempotent() {
     let out = knobyte(root, &["setup", "--tools", "claude,codex,cursor,windsurf,copilot,opencode", "--no-agent"], None);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("COPY BELOW THIS LINE"), "prompt printed for manual paste");
+    assert!(!stdout.contains("COPY BELOW THIS LINE"), "setup never pauses on a pasted prompt");
+    assert!(stdout.contains("Population pending"), "{}", stdout);
+    assert!(!stdout.contains("Has population finished"));
 
     // Files setup writes per tool.
     for f in [
@@ -238,7 +261,11 @@ fn fresh_setup_scores_100_and_is_idempotent() {
         ".agents/skills/knobyte-relay/SKILL.md",
         ".windsurfrules",
         ".github/copilot-instructions.md",
-        ".opencode/opencode.json",
+        "opencode.json",
+        ".mcp.json",
+        ".cursor/mcp.json",
+        ".vscode/mcp.json",
+        ".codex/config.toml",
         ".knobyte/context/decisions.md",
         ".knobyte/context/setup.md",
         ".knobyte/patterns/INDEX.md",
@@ -254,18 +281,265 @@ fn fresh_setup_scores_100_and_is_idempotent() {
     assert!(stack.contains("status: in_flight") && stack.contains("last_updated: 20"));
     assert!(!stack.contains("status: draft"));
 
+    // OpenCode: instructions and the MCP server share the root opencode.json.
+    let oc: serde_json::Value = serde_json::from_str(&fs::read_to_string(root.join("opencode.json")).unwrap()).unwrap();
+    assert!(oc["instructions"].as_array().unwrap().iter().any(|i| i == ".knobyte/AGENTS.md"));
+    assert_eq!(oc["mcp"]["knobyte"]["type"], "local");
+    // Windsurf's MCP configuration is user-level: never written without consent.
+    assert!(!empty_home().join(".codeium").exists());
+    assert!(stdout.contains("~/.codeium/windsurf/mcp_config.json"), "{}", stdout);
+
+    // Docs still marked "to fill" are information, not drift.
     let check = knobyte(root, &["check", "--json"], None);
     let report: serde_json::Value = serde_json::from_slice(&check.stdout).unwrap();
     assert_eq!(report["score"].as_f64(), Some(100.0), "{}", serde_json::to_string_pretty(&report["issues"]).unwrap());
+    let pending: Vec<&serde_json::Value> = report["issues"].as_array().unwrap().iter().filter(|i| i["code"] == "POPULATION_PENDING").collect();
+    assert_eq!(pending.len(), 7);
+    assert!(pending.iter().all(|i| i["severity"] == "info"));
+    assert!(report["issues"].as_array().unwrap().iter().all(|i| i["severity"] != "error"));
 
     // Second run: nothing changes.
+    let files = ["CLAUDE.md", ".cursorrules", "opencode.json", ".knobyte/config.json", ".mcp.json", ".cursor/mcp.json", ".vscode/mcp.json", ".codex/config.toml"];
     let snapshot = |p: &str| fs::read(root.join(p)).unwrap();
-    let before: Vec<Vec<u8>> = ["CLAUDE.md", ".cursorrules", ".opencode/opencode.json", ".knobyte/config.json"].iter().map(|p| snapshot(p)).collect();
+    let before: Vec<Vec<u8>> = files.iter().map(|p| snapshot(p)).collect();
     let again = knobyte(root, &["setup", "--no-agent"], None);
     assert!(again.status.success());
-    let after: Vec<Vec<u8>> = ["CLAUDE.md", ".cursorrules", ".opencode/opencode.json", ".knobyte/config.json"].iter().map(|p| snapshot(p)).collect();
+    let after: Vec<Vec<u8>> = files.iter().map(|p| snapshot(p)).collect();
     assert_eq!(before, after);
     assert!(String::from_utf8_lossy(&again.stdout).contains("Using configured AI tools"));
+}
+
+fn mkdirs(base: &Path, dirs: &[&str]) {
+    for d in dirs {
+        fs::create_dir_all(base.join(d)).unwrap();
+    }
+}
+
+/// A small Rust project where `parse_config` is the obviously central function.
+fn write_central_project(root: &Path) {
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n").unwrap();
+    fs::write(root.join("src/config.rs"), "pub fn parse_config(s: &str) -> usize {\n    s.len()\n}\n").unwrap();
+    for name in ["a", "b", "c"] {
+        fs::write(
+            root.join(format!("src/{}.rs", name)),
+            format!("use crate::config::parse_config;\n\npub fn run_{}() -> usize {{\n    parse_config(\"{}\")\n}}\n", name, name),
+        )
+        .unwrap();
+    }
+    fs::write(root.join("src/lib.rs"), "pub mod a;\npub mod b;\npub mod c;\npub mod config;\n").unwrap();
+}
+
+/// No `--tools`: setup detects the developer's tools (here Cursor from `~/.cursor` and Codex
+/// from a CLI on PATH), wires each one including its MCP server, indexes in one pass, does not
+/// pause for population and ends with a proof summary naming a real central symbol.
+#[cfg(unix)]
+#[test]
+fn setup_detects_tools_wires_mcp_and_finishes_without_pausing() {
+    let d = tempdir().unwrap();
+    let root = d.path().join("proj");
+    let home = d.path().join("home");
+    mkdirs(&home, &[".cursor"]);
+    let fake = d.path().join("bin");
+    write_script(&fake, "codex", "#!/bin/sh\ntouch \"$HOME/codex-ran\"\nexit 1\n");
+    fs::create_dir_all(&root).unwrap();
+    git_init(&root);
+    write_central_project(&root);
+    git(&root, &["add", "-A"]);
+    git(&root, &["commit", "-qm", "init"]);
+
+    let out = knobyte_with(&root, &["setup"], Some(&fake), &home);
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    assert!(out.status.success(), "{}\n{}", stdout, String::from_utf8_lossy(&out.stderr));
+    assert!(!home.join("codex-ran").exists(), "never launched without consent");
+    let cfg: serde_json::Value = serde_json::from_str(&fs::read_to_string(root.join(".knobyte/config.json")).unwrap()).unwrap();
+    assert_eq!(cfg["aiTools"], serde_json::json!(["cursor", "codex"]), "{}", stdout);
+    assert!(stdout.contains("Detected:") && stdout.contains("~/.cursor") && stdout.contains("codex on PATH"), "{}", stdout);
+    for f in [".cursorrules", ".cursor/mcp.json", "AGENTS.md", ".agents/skills/knobyte-inbox/SKILL.md", ".codex/config.toml"] {
+        assert!(root.join(f).exists(), "missing {}", f);
+    }
+    assert!(!root.join(".mcp.json").exists() && !root.join("CLAUDE.md").exists());
+    let toml = fs::read_to_string(root.join(".codex/config.toml")).unwrap();
+    assert!(toml.contains("[mcp_servers.knobyte]") && toml.contains("args = [\"mcp\", \"--stdio\", \"--profile\", \"core\"]"), "{}", toml);
+    let cursor: serde_json::Value = serde_json::from_str(&fs::read_to_string(root.join(".cursor/mcp.json")).unwrap()).unwrap();
+    assert_eq!(cursor["mcpServers"]["knobyte"]["command"], bin().to_string_lossy().as_ref(), "not on PATH: absolute path");
+
+    // One indexing display, then the proof.
+    for needle in ["[1/4] scan", "[2/4] code graph", "[3/4] vector index", "[4/4] wiki index", "Setup summary", "Vector index", "ready (hashed-v1", "Drift score", "100/100", "0/7 populated"] {
+        assert!(stdout.contains(needle), "missing {:?}:\n{}", needle, stdout);
+    }
+    assert!(stdout.contains("Try asking your agent: \"Use Knobyte to explain how parse_config works.\""), "{}", stdout);
+    // The commit is offered last and nothing is committed without consent.
+    let commit_at = stdout.find("git commit -m").unwrap();
+    assert!(commit_at > stdout.find("Try asking your agent").unwrap());
+    assert!(stdout.contains(".cursor/mcp.json .codex/config.toml"), "MCP files are part of the checkpoint: {}", stdout);
+    assert_eq!(git(&root, &["log", "--oneline"]).lines().count(), 1);
+
+    // Population is pending: markers stay, every instruction surface says what to do next.
+    assert!(!knobyte::setup::is_scaffold_populated(&root.join(".knobyte")));
+    assert!(root.join(".knobyte/local/setup-pending").exists());
+    assert!(fs::read_to_string(root.join("AGENTS.md")).unwrap().contains("knobyte setup --finish"));
+    assert!(fs::read_to_string(root.join(".cursorrules")).unwrap().contains("knobyte setup --finish"));
+    assert!(fs::read_to_string(root.join(".knobyte/AGENTS.md")).unwrap().contains("Population pending"));
+    assert!(fs::read_to_string(root.join(".knobyte/ROUTER.md")).unwrap().contains("knobyte setup --finish"));
+    let prompt = knobyte_with(&root, &["setup", "--print-prompt"], None, &home);
+    assert!(String::from_utf8_lossy(&prompt.stdout).contains("knobyte setup --finish"));
+
+    // The MCP server tells the agent too.
+    use std::io::Write;
+    let mut child = Command::new(bin())
+        .args(["mcp", "--stdio", "--root", root.to_str().unwrap()])
+        .current_dir(d.path())
+        .env("HOME", &home)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}\n{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"knobyte_session_start\",\"arguments\":{}}}\n")
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("Knobyte population is pending"), "{}", text);
+    assert!(text.contains("population_pending\\\": true"), "{}", text);
+}
+
+#[test]
+fn nothing_detected_falls_back_to_agents_and_claude_md() {
+    let d = tempdir().unwrap();
+    let root = d.path();
+    git_init(root);
+    fs::write(root.join("main.rs"), "fn main() {}\n").unwrap();
+    let out = knobyte(root, &["setup", "--skip-graph"], None);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{}", stdout);
+    assert!(stdout.contains("No AI tools detected; writing AGENTS.md and CLAUDE.md"), "{}", stdout);
+    assert!(root.join("AGENTS.md").exists() && root.join("CLAUDE.md").exists());
+    assert!(!root.join(".mcp.json").exists() && !root.join(".codex").exists(), "nothing detected: no MCP files");
+    // `--tools none` still records an explicit "no tools" decision.
+    let d2 = tempdir().unwrap();
+    git_init(d2.path());
+    assert!(knobyte(d2.path(), &["setup", "--tools", "none", "--skip-graph"], None).status.success());
+    assert!(!d2.path().join("AGENTS.md").exists() && !d2.path().join("CLAUDE.md").exists());
+}
+
+#[test]
+fn no_mcp_skips_registration_and_tools_flag_overrides_detection() {
+    let d = tempdir().unwrap();
+    let root = d.path().join("p");
+    let home = d.path().join("home");
+    mkdirs(&home, &[".cursor", ".codex"]);
+    fs::create_dir_all(&root).unwrap();
+    git_init(&root);
+    let out = knobyte_with(&root, &["setup", "--tools", "claude", "--no-mcp", "--skip-graph"], None, &home);
+    assert!(out.status.success());
+    assert!(String::from_utf8_lossy(&out.stdout).contains("Skipping MCP server registration"));
+    assert!(root.join("CLAUDE.md").exists() && !root.join(".mcp.json").exists());
+    assert!(!root.join(".cursorrules").exists(), "--tools overrides detection");
+}
+
+/// Windsurf's MCP file is user-level: setup prints the snippet and writes it only with
+/// `--global-mcp`, merging into the existing file.
+#[test]
+fn windsurf_user_config_needs_explicit_flag() {
+    let d = tempdir().unwrap();
+    let root = d.path().join("p");
+    let home = d.path().join("home");
+    mkdirs(&home, &[".codeium/windsurf"]);
+    let file = home.join(".codeium/windsurf/mcp_config.json");
+    let original = "{\n  \"mcpServers\": {\n    \"other\": { \"command\": \"other-server\" }\n  }\n}\n";
+    fs::write(&file, original).unwrap();
+    fs::create_dir_all(&root).unwrap();
+    git_init(&root);
+
+    let out = knobyte_with(&root, &["setup", "--tools", "windsurf", "--skip-graph"], None, &home);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{}", stdout);
+    assert_eq!(fs::read_to_string(&file).unwrap(), original, "never touched without consent");
+    assert!(stdout.contains("~/.codeium/windsurf/mcp_config.json") && stdout.contains("--global-mcp"), "{}", stdout);
+    assert!(stdout.contains("\"--root\""), "snippet printed: {}", stdout);
+
+    let out = knobyte_with(&root, &["setup", "--tools", "windsurf", "--global-mcp", "--skip-graph"], None, &home);
+    assert!(out.status.success());
+    let v: serde_json::Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(v["mcpServers"]["other"]["command"], "other-server");
+    assert_eq!(v["mcpServers"]["knobyte"]["args"][4], "--root");
+    let again = fs::read_to_string(&file).unwrap();
+    assert!(knobyte_with(&root, &["setup", "--tools", "windsurf", "--global-mcp", "--skip-graph"], None, &home).status.success());
+    assert_eq!(fs::read_to_string(&file).unwrap(), again, "idempotent");
+    let paths = git(&root, &["status", "--porcelain", "--untracked-files=all"]);
+    assert!(!paths.contains("mcp_config"), "user-level files are not in the repository");
+}
+
+/// A repository that ignores `.vscode/`: the Copilot MCP file is written but left out of the
+/// commit (and reported), so the printed `git add` command and `--commit` both work.
+#[test]
+fn gitignored_mcp_file_is_left_out_of_the_commit() {
+    let d = tempdir().unwrap();
+    let root = d.path();
+    git_init(root);
+    fs::write(root.join(".gitignore"), "target/\n.vscode/\n").unwrap();
+    fs::write(root.join("main.rs"), "fn main() {}\n").unwrap();
+    git(root, &["add", "-A"]);
+    git(root, &["commit", "-qm", "init"]);
+
+    let out = knobyte(root, &["setup", "--tools", "claude,copilot", "--no-agent", "--skip-graph"], None);
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    assert!(out.status.success(), "{}", stdout);
+    assert!(root.join(".vscode/mcp.json").exists(), "still written for local use");
+    assert!(stdout.contains("Not committed") && stdout.contains("git add -f .vscode/mcp.json"), "{}", stdout);
+    let add_line = stdout.lines().find(|l| l.trim_start().starts_with("git add -- ")).unwrap().trim().to_string();
+    assert!(!add_line.contains(".vscode"), "{}", add_line);
+    // The printed command works as shown.
+    let args: Vec<&str> = add_line.split_whitespace().skip(1).collect();
+    git(root, &args);
+    git(root, &["reset", "-q"]);
+
+    let out = knobyte(root, &["setup", "--tools", "claude,copilot", "--no-agent", "--skip-graph", "--commit"], None);
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    assert!(out.status.success(), "{}", stdout);
+    assert!(stdout.contains("Committed:"), "{}", stdout);
+    let files = git(root, &["show", "--name-only", "--format=", "HEAD"]);
+    assert!(files.contains(".mcp.json") && files.contains("CLAUDE.md") && !files.contains(".vscode"), "{}", files);
+}
+
+/// `--finish` after population: re-scan, finalize with baselines, clear the pending marker.
+#[test]
+fn finish_captures_baselines_after_population() {
+    let d = tempdir().unwrap();
+    let root = d.path();
+    git_init(root);
+    fs::write(root.join("lib.rs"), "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n").unwrap();
+    assert!(knobyte(root, &["setup", "--tools", "claude", "--no-agent"], None).status.success());
+    assert!(root.join(".knobyte/local/setup-pending").exists());
+
+    // `--finish` before population reports what is still pending and succeeds.
+    let early = knobyte(root, &["setup", "--finish"], None);
+    assert!(early.status.success());
+    assert!(String::from_utf8_lossy(&early.stdout).contains("Population is still pending"));
+
+    populate_scaffold(root);
+    let arch = root.join(".knobyte/context/architecture.md");
+    let mut text = fs::read_to_string(&arch).unwrap();
+    text.push_str("\nAddition lives in lib.rs.\n<!-- kb-ground: function:lib.rs:add -->\n");
+    fs::write(&arch, &text).unwrap();
+    let out = knobyte(root, &["setup", "--finish"], None);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{}\n{}", stdout, String::from_utf8_lossy(&out.stderr));
+    assert!(stdout.contains("Finishing setup"), "{}", stdout);
+    assert!(stdout.contains("[2/4] code graph"), "re-scanned: {}", stdout);
+    assert!(stdout.contains("Captured 1 grounding baseline"), "{}", stdout);
+    assert!(stdout.contains("7/7 populated") && !stdout.contains("population pending"), "{}", stdout);
+    assert!(stdout.contains("Try asking your agent: \"Use Knobyte to explain how add works.\""), "{}", stdout);
+    assert!(fs::read_to_string(&arch).unwrap().contains("<!-- kb-ground: function:lib.rs:add #"));
+    assert!(!root.join(".knobyte/local/setup-pending").exists());
+    let check = knobyte(root, &["check", "--json"], None);
+    let report: serde_json::Value = serde_json::from_slice(&check.stdout).unwrap();
+    assert!(!report["issues"].as_array().unwrap().iter().any(|i| i["code"] == "POPULATION_PENDING"));
 }
 
 /// Setup's own templates carry explicit ids, types, lifecycle states and `relations`: the
@@ -723,6 +997,20 @@ fn setup_rerun_on_populated_clone_does_not_modify_tracked_files() {
     );
     assert!(clone.join(".knobyte/wiki.db").exists() && clone.join(".knobyte/graph.db").exists());
     assert!(!stdout.contains("git commit -m"), "no commit checkpoint on a re-run: {}", stdout);
+    assert!(stdout.contains(".mcp.json already registers the Knobyte MCP server"), "{}", stdout);
+
+    // A repository set up before MCP registration existed: joining still writes nothing and
+    // says how to add it; detected tools on the joiner's machine change nothing either.
+    git(&clone, &["rm", "-q", ".mcp.json"]);
+    git(&clone, &["commit", "-qm", "older setup"]);
+    let joiner_home = d.path().join("joiner-home");
+    fs::create_dir_all(joiner_home.join(".cursor")).unwrap();
+    let out = knobyte_with(&clone, &["setup", "--no-agent"], None, &joiner_home);
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    assert!(out.status.success(), "{}", stdout);
+    assert_eq!(git(&clone, &["status", "--porcelain"]), "", "tracked files changed:\n{}", stdout);
+    assert!(!clone.join(".mcp.json").exists() && !clone.join(".cursorrules").exists());
+    assert!(stdout.contains("Would create .mcp.json") && stdout.contains("knobyte setup --tools claude"), "{}", stdout);
 
     // Explicit opt-in writes the missing baseline.
     let out = knobyte(&clone, &["setup", "--no-agent", "--capture-baselines"], None);

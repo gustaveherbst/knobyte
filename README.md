@@ -36,39 +36,54 @@ open it:
 xattr -d com.apple.quarantine /path/to/knobyte
 ```
 
-**Or build from source**, then set up a repository:
+**Or build from source** (Rust 1.90+ and a C compiler; no Node, Python or database server at
+runtime):
 
 ```bash
-# 1. Build (Rust 1.90+ and a C compiler; no Node, Python or database server at runtime)
 git clone https://github.com/knobyte-ai/knobyte.git && cd knobyte
 cargo install --path .
-
-# 2. Set up a repository: scaffold, agent files, skills and code graph
-cd /path/to/your/project
-knobyte setup --tools claude,codex       # also: cursor, windsurf, copilot, opencode, none
-
-# 3. Populate: confirm the agent launch, or paste the printed prompt into your agent,
-#    then run setup again to capture grounding baselines and build the wiki index
-knobyte setup
-
-# 4. Check, register yourself, explore
-knobyte check
-knobyte member add alex --name "Alex Rivera" --select
-knobyte hub                               # opens a one-time sign-in link in your browser
 ```
+
+**Then set up a repository with one command:**
+
+```bash
+cd /path/to/your/project
+knobyte setup
+```
+
+Setup detects your AI tools (Claude Code, Codex, Cursor, Windsurf, VS Code / Copilot, OpenCode)
+and asks once to confirm them. It wires each one (instruction files, skills and the Knobyte MCP
+server), indexes the repository (code graph, vector index, wiki index), offers to launch Claude
+Code or Codex to write the project docs, and ends with a summary and a first question to ask
+your agent. If no agent runs now, setup still finishes: your first agent session fills the docs
+and runs `knobyte setup --finish`. The last question is whether to commit Knobyte's files.
 
 ```text
-$ knobyte check
-Drift score: 100/100 — 0 errors, 0 warnings, 0 info
-12 files checked
-Groundings: 100.0% intact (3 intact, 0 changed, 0 moved, 0 ambiguous, 0 gone, 0 unverified of 3)
-graph fresh
-[ok] All scaffold files pristine and in sync with codebase.
+Setup summary
+  Tools           Claude Code: CLAUDE.md, skills, .mcp.json (MCP)
+                  Cursor: .cursorrules, .cursor/mcp.json (MCP)
+  Code graph      3 files, 11 symbols, 26 edges
+  Vector index    ready (hashed-v1, 128-dim): 14 code nodes, 11 wiki pages
+  Docs            11 created, 0/7 populated (population pending: your first agent session finishes it)
+  Wiki index      11 entities, 0 grounding baseline(s) captured
+  Drift score     100/100
+  Central symbol  login (src/auth.rs, used from 1 file)
+
+Try asking your agent: "Use Knobyte to explain how login works."
 ```
 
-When you join a repository that already uses Knobyte, build your local indexes with
-`knobyte graph rebuild && knobyte wiki rebuild-index`. [Getting started](docs/getting-started.md)
-walks through all of this with real output.
+`--tools claude,codex` picks the tools yourself (`none` for none), `--no-mcp` skips MCP
+registration and `--launch-agent` launches the populating agent without asking. Then:
+
+```bash
+knobyte check                                      # drift score
+knobyte member add alex --name "Alex Rivera" --select
+knobyte hub                                        # opens a one-time sign-in link in your browser
+```
+
+When you join a repository that already uses Knobyte, run `knobyte setup` too: it builds this
+checkout's indexes and changes no tracked files. [Getting started](docs/getting-started.md) walks
+through all of this with real output.
 
 ---
 
@@ -85,7 +100,7 @@ walks through all of this with real output.
 | Reviewed contributions | The **Inbox**: typed knowledge and spec proposals, a teammate review, and a self-approval guard |
 | Handoffs | **Relays** carrying progress, decisions, blockers, evidence and next actions to named teammates or the whole team |
 | Continuity | **Workstreams** with steps and checkpoints, canonical **Activity**, and the decision/event **timeline** |
-| Agents that know all this | `setup --tools` instruction files and skills, plus an **MCP server** with 30 tools in profiles (15-tool `core` by default) ([Agent integration](docs/agent-integration.md), [MCP](docs/mcp-setup.md)) |
+| Agents that know all this | `setup` detects your tools and writes their instruction files, skills and **MCP server** registration (30 tools in profiles, 15-tool `core` by default) ([Agent integration](docs/agent-integration.md), [MCP](docs/mcp-setup.md)) |
 | A place for people | The local **Project Hub**: context explorer, knowledge pages with drift panels, hybrid search, Inbox review, Relays, Team, Fleet, Jobs and a setup wizard ([Hub](docs/hub.md)) |
 
 ### From one engineer to the next
@@ -116,7 +131,7 @@ envelopes, actors, exit codes, Inbox states and relay rules.
 | `.knobyte/context/`, `patterns/`, `specs/`, `topics/` (wiki, with grounding baselines) | `.knobyte/wiki.db` (wiki index, SQLite FTS5) |
 | `.knobyte/team/members/`, `workstreams/`, `inbox/`, `relays/` | `.knobyte/cozo.db` (vectors and Datalog) |
 | `.knobyte/events/decisions.jsonl`, `events/activity/`, `events/operations.jsonl` | `.knobyte/local/`: drafts, current member, signing key, journals |
-| `CLAUDE.md` / `AGENTS.md` managed blocks, `.claude/skills/`, `.agents/skills/`, tool rule files | `~/.knobyte/projects.json` (Hub fleet), `~/.knobyte/models/` |
+| `CLAUDE.md` / `AGENTS.md` managed blocks, `.claude/skills/`, `.agents/skills/`, tool rule files, project MCP files (`.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`, `opencode.json`, `.codex/config.toml`) | `~/.knobyte/projects.json` (Hub fleet), `~/.knobyte/models/` |
 
 The Markdown and JSON are canonical. Every index can be rebuilt from them.
 
@@ -131,7 +146,7 @@ documents every flag.
 
 | Goal | Commands |
 |---|---|
-| **Set up & maintain** | `knobyte setup [--tools …] [--mode …] [--dry-run]`, `knobyte update`, `knobyte init`, `knobyte skills sync`, `knobyte pattern add <name>` |
+| **Set up & maintain** | `knobyte setup [--tools …] [--no-mcp] [--finish] [--dry-run]`, `knobyte update`, `knobyte init`, `knobyte skills sync`, `knobyte pattern add <name>` |
 | **Health** | `knobyte check [--fix] [--json]`, `knobyte sync [--dry-run]`, `knobyte doctor`, `knobyte heartbeat`, `knobyte watch`, `knobyte tui` |
 | **Code graph** | `knobyte graph` (build), `knobyte graph status`, `knobyte graph refresh`, `knobyte graph rebuild`, `knobyte graph repair`, `knobyte graph query <where-defined\|who-calls\|what-calls\|who-imports> <symbol>`, `knobyte graph scope "<task>"`, `knobyte graph get <id…>`, `knobyte graph ground`, `knobyte impact <target>` |
 | **Vectors & Datalog** | `knobyte cozo search <text>`, `knobyte cozo query <script>`, `knobyte cozo pagerank`, `knobyte cozo shortest-path <a> <b>`, `knobyte cozo sync`, `knobyte cozo model status`, `knobyte cozo model pull`, `knobyte cozo model use <backend>` |
@@ -158,6 +173,9 @@ Team mutations accept `--preview`, `--apply <envelope>`, `--request <file>` and
 - **Agent launches need consent:** `setup` and `sync` start Claude Code or Codex only after you
   confirm, or with `--launch-agent`. They show the exact command and allowed tools first, and
   `KNOBYTE_NO_AGENT_LAUNCH=1` turns launching off.
+- **Your home directory stays yours:** setup reads it only to detect AI tools. It writes
+  user-level configuration (Windsurf's MCP file) only after a confirmation that names the file, or
+  with `--global-mcp`.
 - **Locked-down interfaces:**
   - The Hub requires a one-time sign-in link and a session cookie, even on loopback, and every
     write is CSRF-protected.

@@ -3,8 +3,9 @@
 //! A populated `.knobyte/` is inert unless some file the agent loads on its own tells it to
 //! read the scaffold. Claude Code and Codex are handled by the skills installer (managed block
 //! in the root `CLAUDE.md` / `AGENTS.md`); this module handles Cursor, Windsurf, Copilot and
-//! OpenCode. A missing anchor gets the full rules template; an existing hand-written anchor
-//! gets a pointer block appended, preserving every byte the user wrote.
+//! OpenCode (`opencode.json` at the project root, which also holds its MCP registration). A
+//! missing anchor gets the full rules template; an existing hand-written anchor gets a pointer
+//! block appended, preserving every byte the user wrote.
 
 use std::fs;
 use std::path::Path;
@@ -14,7 +15,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::drift::checkers::tool_config_sync::{is_tool_config_copy, ANCHOR_END, ANCHOR_START};
-use crate::managed_block::{detect_eol, plan_block_edit, BlockAction, BlockReason, BlockSpec};
+use crate::managed_block::{plan_block_edit, BlockAction, BlockReason, BlockSpec};
+use crate::setup::jsonedit;
 use crate::setup::templates::{OPENCODE_TEMPLATE, TOOL_RULES_TEMPLATE};
 
 /// Refuse to edit an existing pointer block larger than this.
@@ -25,7 +27,7 @@ pub const TOOL_ANCHORS: &[(&str, &str, bool)] = &[
     ("cursor", ".cursorrules", false),
     ("windsurf", ".windsurfrules", false),
     ("copilot", ".github/copilot-instructions.md", false),
-    ("opencode", ".opencode/opencode.json", true),
+    ("opencode", "opencode.json", true),
 ];
 
 /// Display name of an AI tool id.
@@ -129,7 +131,8 @@ pub fn plan_markdown_anchor(current: Option<&[u8]>) -> (AnchorOutcome, Option<St
     }
 }
 
-/// Plan the OpenCode edit: append `.knobyte/AGENTS.md` to its `instructions` array.
+/// Plan the OpenCode edit: append `.knobyte/AGENTS.md` to its `instructions` array, keeping
+/// every other key, comment and the formatting of `opencode.json`.
 pub fn plan_opencode_anchor(current: Option<&str>) -> (AnchorOutcome, Option<String>, Option<String>) {
     let Some(content) = current else {
         return (AnchorOutcome::Created, None, Some(OPENCODE_TEMPLATE.to_string()));
@@ -141,30 +144,26 @@ pub fn plan_opencode_anchor(current: Option<&str>) -> (AnchorOutcome, Option<Str
             None,
         )
     };
-    let Ok(mut parsed) = serde_json::from_str::<serde_json::Value>(content) else {
+    let Ok(root) = jsonedit::parse(content) else {
         return bad();
     };
-    let Some(obj) = parsed.as_object_mut() else {
+    if !matches!(root, jsonedit::Node::Object { .. }) {
         return bad();
-    };
-    let list: Vec<String> = match obj.get("instructions") {
-        None => Vec::new(),
-        Some(serde_json::Value::Array(a)) => a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
-        Some(_) => return bad(),
-    };
-    if list.iter().any(|e| e.starts_with(".knobyte/") || references_scaffold(e)) {
-        return (AnchorOutcome::AlreadyLinked, None, None);
     }
-    let mut new_list: Vec<serde_json::Value> = obj
-        .get("instructions")
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
-    new_list.push(serde_json::Value::String(".knobyte/AGENTS.md".to_string()));
-    obj.insert("instructions".to_string(), serde_json::Value::Array(new_list));
-    let eol = detect_eol(content);
-    let serialized = format!("{}\n", serde_json::to_string_pretty(&parsed).unwrap_or_default());
-    (AnchorOutcome::Appended, None, Some(serialized.replace('\n', eol)))
+    match jsonedit::get(content, &["instructions"]) {
+        Ok(None) => {}
+        Ok(Some(serde_json::Value::Array(a))) => {
+            let list: Vec<&str> = a.iter().filter_map(|v| v.as_str()).collect();
+            if list.iter().any(|e| e.starts_with(".knobyte/") || references_scaffold(e)) {
+                return (AnchorOutcome::AlreadyLinked, None, None);
+            }
+        }
+        _ => return bad(),
+    }
+    match jsonedit::append_string(content, &["instructions"], ".knobyte/AGENTS.md") {
+        Ok(out) => (AnchorOutcome::Appended, None, Some(out)),
+        Err(_) => bad(),
+    }
 }
 
 /// Ensure every selected non-agent tool's anchor points at the scaffold (or, with `dry_run`,
