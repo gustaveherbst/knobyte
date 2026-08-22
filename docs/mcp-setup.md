@@ -57,7 +57,7 @@ server prints the live endpoints at startup:
 | `GET /sse` | SSE stream (off with `--http`). The first event names the messages URL for this session. |
 | `POST /messages?sessionId=…` | JSON-RPC messages for an SSE session (off with `--http`). It answers `202 Accepted`, and the reply arrives on the SSE stream. |
 | `GET /dashboard` | A small inspector page. |
-| `GET /health` | Liveness check with the active tool profile: `{"service":"knobyte-mcp","status":"ok","version":"0.9.5","profile":"core","tools":["knobyte_session_start", ...]}`. |
+| `GET /health` | Liveness check with the active tool profile: `{"service":"knobyte-mcp","status":"ok","version":"0.9.6","profile":"core","tools":["knobyte_session_start", ...]}`. |
 
 ---
 

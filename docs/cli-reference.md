@@ -1,7 +1,7 @@
 # Knobyte CLI Reference
 
 Every `knobyte` command, subcommand and flag. The per-command sections below are generated
-from `knobyte <command> --help` for Knobyte 0.9.5, so they match the binary exactly. For task-oriented
+from `knobyte <command> --help` for Knobyte 0.9.6, so they match the binary exactly. For task-oriented
 explanations, follow the links to the guides.
 
 `knobyte commands` prints a one-page overview, and `knobyte capabilities --json` returns the
