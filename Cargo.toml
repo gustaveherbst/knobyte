@@ -1,6 +1,6 @@
 [package]
 name = "knobyte"
-version = "0.9.4"
+version = "0.9.5"
 edition = "2021"
 description = "Shared project memory, code graphs, and local vector search for engineers and their coding agents"
 authors = ["Knobyte Team"]

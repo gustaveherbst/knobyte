@@ -23,7 +23,7 @@
   <circle cx="60" cy="22" r="5.5" fill="#10b981" />
   <text x="500" y="27" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#94a3b8" text-anchor="middle">Project Memory Hub — http://127.0.0.1:4000</text>
   <rect x="880" y="12" width="95" height="22" rx="11" fill="#1e293b" />
-  <text x="927" y="27" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#38bdf8" text-anchor="middle">v0.9.4 LOCAL</text>
+  <text x="927" y="27" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#38bdf8" text-anchor="middle">v0.9.5 LOCAL</text>
 
   <!-- Left Sidebar (Width 180) -->
   <g transform="translate(0, 45)">

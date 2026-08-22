@@ -4,7 +4,7 @@
 
 # Knobyte
 
-[![Version](https://img.shields.io/badge/version-0.9.4-blue.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/version-0.9.5-blue.svg)](Cargo.toml)
 [![Website](https://img.shields.io/badge/Website-knobyte.ai-blue)](https://knobyte.ai)
 [![License: AGPL--3.0 / Commercial](https://img.shields.io/badge/License-AGPL--3.0%20%2F%20Commercial-blue.svg)](README.md#licensing)
 [![Written in Rust](https://img.shields.io/badge/Written%20in-Rust-orange.svg)](https://www.rust-lang.org)
