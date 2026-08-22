@@ -10,7 +10,38 @@ first drift check. Every output shown here comes from a real run on a three-file
 
 ---
 
-## 1. Build
+## 1. Install
+
+### Download a prebuilt binary
+
+Each [release](https://github.com/gustaveherbst/knobyte/releases/latest) has an archive per
+platform, with a SHA-256 checksum next to it:
+
+| Platform | Archive |
+|---|---|
+| macOS (Apple Silicon) | `knobyte-aarch64-apple-darwin.tar.gz` |
+| Linux (x86-64) | `knobyte-x86_64-unknown-linux-gnu.tar.gz` |
+| Linux (arm64) | `knobyte-aarch64-unknown-linux-gnu.tar.gz` |
+| Windows (x86-64) | `knobyte-x86_64-pc-windows-msvc.zip` |
+
+```bash
+shasum -a 256 -c knobyte-aarch64-apple-darwin.sha256   # optional: verify the download
+tar -xzf knobyte-aarch64-apple-darwin.tar.gz
+sudo mv knobyte /usr/local/bin/                          # or any directory on your PATH
+```
+
+**macOS:** the binary is not notarized by Apple, so macOS quarantines it when it is downloaded with
+a browser and refuses to open it ("cannot be opened because the developer cannot be verified").
+Clear the quarantine flag once:
+
+```bash
+xattr -d com.apple.quarantine /usr/local/bin/knobyte
+```
+
+Downloads made with `curl` or `wget`, and binaries you build yourself, are not quarantined and need
+no extra step.
+
+### Build from source
 
 Knobyte is a single Rust binary. Building it needs **Rust 1.90+**, `cargo` and a C compiler,
 because SQLite, the Tree-sitter grammars and `ring` bundle C code. Nothing else is needed at

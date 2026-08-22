@@ -27,6 +27,17 @@ readable code groundings with automatic relocation, and a multi-repository Hub.
 
 ## Quick start
 
+**Download** a prebuilt binary for macOS (Apple Silicon), Linux (x86-64, arm64) or Windows from the
+[latest release](https://github.com/gustaveherbst/knobyte/releases/latest), extract it and put
+`knobyte` on your `PATH`. On macOS, clear the download quarantine flag once, or macOS will refuse to
+open it:
+
+```bash
+xattr -d com.apple.quarantine /path/to/knobyte
+```
+
+**Or build from source**, then set up a repository:
+
 ```bash
 # 1. Build (Rust 1.90+ and a C compiler; no Node, Python or database server at runtime)
 git clone https://github.com/knobyte-ai/knobyte.git && cd knobyte
@@ -169,6 +180,7 @@ Team mutations accept `--preview`, `--apply <envelope>`, `--request <file>` and
 | [Project Hub](docs/hub.md) | Sign-in, pages, jobs, setup wizard, Fleet |
 | [MCP server](docs/mcp-setup.md) | Transports, security, client setup, tool profiles, all 30 tools |
 | [CLI reference](docs/cli-reference.md) | Every command and flag |
+| [Releasing](docs/releasing.md) | Release builds, platform downloads, macOS install note |
 
 ---
 

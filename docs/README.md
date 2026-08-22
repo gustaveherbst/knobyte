@@ -16,6 +16,7 @@ engineers and their coding agents. It is written in Rust and ships as a single b
 | **[Project Hub](hub.md)** | Sign-in, security, every page, jobs, setup wizard, Fleet |
 | **[MCP server](mcp-setup.md)** | Transports, security, client configuration, tool profiles, all 30 tools |
 | **[CLI reference](cli-reference.md)** | Every command and flag, generated from `--help`; exit codes; environment variables |
+| **[Releasing](releasing.md)** | Cutting a release, platform downloads, the macOS quarantine note, optional local signing |
 
 ## Layout of a Knobyte project
 
