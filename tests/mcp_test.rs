@@ -13,7 +13,8 @@ use knobyte::mcp::handler::process_jsonrpc_request_with_config;
 use knobyte::mcp::protocol::{CallToolResult, JsonRpcRequest};
 use knobyte::mcp::sse::{build_router, process_jsonrpc_request, resolve_auth_token, ServerSecurity};
 use knobyte::mcp::stdio::run_stdio;
-use knobyte::mcp::tools::{execute_tool_with_config, get_tools_list};
+use knobyte::mcp::profiles::McpProfile;
+use knobyte::mcp::tools::{execute_tool_with_config, get_tools_list, tools_for_profile};
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -75,25 +76,29 @@ fn test_mcp_tools_list() {
         "knobyte_log",
         "knobyte_timeline",
         "knobyte_graph_query",
-        "knobyte_wiki_query",
+        "knobyte_wiki_search",
+        "knobyte_wiki_get",
         "knobyte_vector_search",
         "knobyte_cozo_datalog",
         "knobyte_cozo_pagerank",
         "knobyte_cozo_shortest_path",
-        "knobyte_sync_groundings",
         "knobyte_session_start",
         "knobyte_workstream_step_update",
         "knobyte_file_context",
         "knobyte_harvest",
-        "knobyte_playbook_list",
-        "knobyte_playbook_get",
+        "knobyte_members",
+        "knobyte_playbooks",
         "knobyte_playbook_complete_step",
         "knobyte_catch_up",
-        "knobyte_catch_up_mark",
     ] {
         assert!(tools.iter().any(|t| t.name == name), "missing tool {}", name);
     }
-    assert_eq!(tools.len(), 38);
+    assert_eq!(tools.len(), 30);
+    // Retired names stay callable as aliases but are never listed.
+    for a in knobyte::mcp::profiles::ALIASES {
+        assert!(!tools.iter().any(|t| t.name == a.name), "alias {} must not be listed", a.name);
+        assert!(tools.iter().any(|t| t.name == a.target), "alias {} targets a missing tool", a.name);
+    }
 
     // Unique names, non-empty descriptions, object schemas, no projectRoot override.
     let mut names: Vec<_> = tools.iter().map(|t| t.name.clone()).collect();
@@ -109,8 +114,15 @@ fn test_mcp_tools_list() {
 
     let check = tools.iter().find(|t| t.name == "knobyte_check").unwrap();
     assert!(check.input_schema["properties"].get("fix").is_some());
+    assert!(check.input_schema["properties"].get("dryRun").is_some());
     let datalog = tools.iter().find(|t| t.name == "knobyte_cozo_datalog").unwrap();
     assert!(datalog.description.to_lowercase().contains("read-only"));
+    assert!(datalog.description.contains("knobyte://reference/datalog-schema"));
+
+    // Descriptions stay short: schema/reference detail lives in properties or resources.
+    for t in &tools {
+        assert!(t.description.len() <= 240, "{} description is {} chars", t.name, t.description.len());
+    }
 }
 
 #[test]
@@ -146,7 +158,8 @@ fn test_mcp_jsonrpc_tools_list() {
     assert!(resp.error.is_none());
     let result = resp.result.unwrap();
     let tools = result["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), get_tools_list().len());
+    // Default profile: core.
+    assert_eq!(tools.len(), tools_for_profile(McpProfile::Core).len());
     assert!(tools.iter().any(|t| t["name"] == "knobyte_session_start"));
 }
 
@@ -456,16 +469,16 @@ fn test_playbook_and_catch_up_tools() {
     let run = run_action(&config, json!({ "kind": "playbook.run.start", "playbookId": "rel" }), &ActorChoice::resolved()).unwrap();
     let run_id = run.result["id"].as_str().unwrap().to_string();
 
-    let r = call(&config, "knobyte_playbook_list", json!({}));
+    let r = call(&config, "knobyte_playbooks", json!({}));
     assert!(!is_err(&r), "{}", r.content[0].text);
     let v: Value = serde_json::from_str(&r.content[0].text).unwrap();
     assert_eq!(v["items"][0]["id"], "rel");
-    assert!(is_err(&call(&config, "knobyte_playbook_list", json!({ "state": "bogus" }))));
-    let r = call(&config, "knobyte_playbook_get", json!({ "id": "rel" }));
+    assert!(is_err(&call(&config, "knobyte_playbooks", json!({ "state": "bogus" }))));
+    let r = call(&config, "knobyte_playbooks", json!({ "id": "rel" }));
     let v: Value = serde_json::from_str(&r.content[0].text).unwrap();
     assert_eq!(v["runs"][0]["id"], run_id.as_str());
-    assert!(is_err(&call(&config, "knobyte_playbook_get", json!({}))));
-    assert!(is_err(&call(&config, "knobyte_playbook_get", json!({ "id": "../x" }))));
+    assert!(is_err(&call(&config, "knobyte_playbooks", json!({ "id": "rel", "runId": run_id }))));
+    assert!(is_err(&call(&config, "knobyte_playbooks", json!({ "id": "../x" }))));
 
     // Agents record step evidence as the resolved actor.
     let r = call(&config, "knobyte_playbook_complete_step", json!({ "runId": run_id, "stepId": "test", "evidence": ["file:target/report.txt", "412 passed"], "note": "green" }));
@@ -476,7 +489,7 @@ fn test_playbook_and_catch_up_tools() {
     // The step's 1-based number names the same (now completed) step.
     let r = call(&config, "knobyte_playbook_complete_step", json!({ "runId": run_id, "stepId": 1 }));
     assert!(is_err(&r) && r.content[0].text.contains("already complete"), "{}", r.content[0].text);
-    let r = call(&config, "knobyte_playbook_get", json!({ "runId": run_id }));
+    let r = call(&config, "knobyte_playbooks", json!({ "runId": run_id }));
     assert!(r.content[0].text.contains("412 passed"));
 
     // No MCP tool creates, publishes or archives playbooks, or starts/abandons runs.
@@ -490,7 +503,7 @@ fn test_playbook_and_catch_up_tools() {
     assert!(v["items"].as_array().unwrap().iter().any(|i| i["group"] == "playbooks"));
     let observed = v["observedAt"].as_str().unwrap().to_string();
     assert!(is_err(&call(&config, "knobyte_catch_up", json!({ "since": "garbage" }))));
-    let r = call(&config, "knobyte_catch_up_mark", json!({ "at": observed }));
+    let r = call(&config, "knobyte_catch_up", json!({ "mark": true, "at": observed }));
     assert!(!is_err(&r), "{}", r.content[0].text);
     assert!(config.local_dir().join("catch-up/member-alex.json").exists());
     let r = call(&config, "knobyte_catch_up", json!({}));
@@ -816,7 +829,7 @@ async fn test_streamable_http_sessions() {
     let resp = app.clone().oneshot(post(Some(&sid), list.clone())).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let v = body_json(resp).await;
-    assert_eq!(v["result"]["tools"].as_array().unwrap().len(), get_tools_list().len());
+    assert_eq!(v["result"]["tools"].as_array().unwrap().len(), tools_for_profile(McpProfile::Core).len());
 
     // notifications -> 202 with no body
     let resp = app

@@ -74,7 +74,7 @@ walks through all of this with real output.
 | Reviewed contributions | The **Inbox**: typed knowledge and spec proposals, a teammate review, and a self-approval guard |
 | Handoffs | **Relays** carrying progress, decisions, blockers, evidence and next actions to named teammates or the whole team |
 | Continuity | **Workstreams** with steps and checkpoints, canonical **Activity**, and the decision/event **timeline** |
-| Agents that know all this | `setup --tools` instruction files and skills, plus an **MCP server** with 38 tools ([Agent integration](docs/agent-integration.md), [MCP](docs/mcp-setup.md)) |
+| Agents that know all this | `setup --tools` instruction files and skills, plus an **MCP server** with 30 tools in profiles (15-tool `core` by default) ([Agent integration](docs/agent-integration.md), [MCP](docs/mcp-setup.md)) |
 | A place for people | The local **Project Hub**: context explorer, knowledge pages with drift panels, hybrid search, Inbox review, Relays, Team, Fleet, Jobs and a setup wizard ([Hub](docs/hub.md)) |
 
 ### From one engineer to the next
@@ -167,7 +167,7 @@ Team mutations accept `--preview`, `--apply <envelope>`, `--request <file>` and
 | [Code graph and vectors](docs/code-graph-and-vector.md) | Extraction, TypeScript compiler mode, queries, CozoDB, embeddings |
 | [Team workflows](docs/team-memory-workflows.md) | Actors, preview/apply, Inbox, Relays, Members, Workstreams, Specs, Activity |
 | [Project Hub](docs/hub.md) | Sign-in, pages, jobs, setup wizard, Fleet |
-| [MCP server](docs/mcp-setup.md) | Transports, security, client setup, all 38 tools |
+| [MCP server](docs/mcp-setup.md) | Transports, security, client setup, tool profiles, all 30 tools |
 | [CLI reference](docs/cli-reference.md) | Every command and flag |
 
 ---

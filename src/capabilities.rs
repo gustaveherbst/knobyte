@@ -162,7 +162,7 @@ const COMMANDS: &[(&str, &str, &str, &str, &str)] = &[
     ("completion", "read", "knobyte completion <bash|zsh|fish>", "text", "Shell completion script"),
     ("export", "read", "knobyte export [--out <path>]", "text", "Whole scaffold as one Markdown bundle"),
     ("capabilities", "read", "knobyte capabilities --json", "json", "This manifest"),
-    ("mcp", "read", "knobyte mcp [--stdio | --http | --sse] [--port 3005]", "sse", "Model Context Protocol server"),
+    ("mcp", "read", "knobyte mcp [--stdio | --http | --sse] [--port 3005] [--profile core|team|wiki|graph|full]", "sse", "Model Context Protocol server"),
 ];
 
 fn descriptor(row: &(&str, &str, &str, &str, &str)) -> CommandDescriptor {

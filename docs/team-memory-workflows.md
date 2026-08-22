@@ -466,7 +466,7 @@ was marked on: on another branch the digest warns `CATCH_UP_BRANCH_CHANGED` and 
 refused until you run `catch-up reset` (`--to <time>` to rewind, `--clear` to delete it). Mark
 and reset are local workflow actions: they support `--preview` and `--apply`, write only under
 `.knobyte/local/` and record no activity. Agents read the digest with `knobyte_catch_up` and
-move their own cursor with `knobyte_catch_up_mark`.
+move their own cursor with the same tool (`mark: true`).
 
 ---
 

@@ -7,7 +7,7 @@ use knobyte::cozo::CozoEngine;
 use knobyte::doctor::run_doctor;
 use knobyte::heartbeat::run_heartbeat;
 use knobyte::hub::start_hub_server;
-use knobyte::mcp::{start_http_server, start_stdio_server, HttpTransport};
+use knobyte::mcp::{start_sse_server_with_options, start_stdio_server_with, HttpTransport, SseServerOptions};
 use knobyte::progress::format_bytes;
 use knobyte::team::cli::{
     run_activity, run_catch_up, run_inbox, run_log, run_member, run_playbook, run_relay, run_spec, run_timeline,
@@ -291,6 +291,9 @@ enum Commands {
         /// Bearer token required by the MCP server (exported as KNOBYTE_MCP_TOKEN)
         #[arg(long)]
         token: Option<String>,
+        /// Tool profile to list (default core; overrides KNOBYTE_MCP_PROFILE and mcp.profile in .knobyte/config.json)
+        #[arg(long, value_parser = ["core", "team", "wiki", "graph", "full"])]
+        profile: Option<String>,
     },
     /// Create a new pattern template
     Pattern {
@@ -1486,19 +1489,42 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             http,
             stdio,
             token,
+            profile,
         }) => {
             if let Some(t) = token {
                 std::env::set_var("KNOBYTE_MCP_TOKEN", t);
             }
+            let scaffold_root = knobyte::mcp::handler::server_config().scaffold_root;
+            let resolved = match knobyte::mcp::resolve_profile_for(profile.as_deref(), &scaffold_root) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("{} {}", "[error]".red().bold(), e);
+                    std::process::exit(2);
+                }
+            };
+            let profile_line = format!(
+                "tool profile {} ({} tools, from {})",
+                resolved.profile,
+                resolved.profile.tool_names().len(),
+                resolved.source
+            );
             if stdio {
-                start_stdio_server()?;
+                // stdout carries protocol messages only.
+                eprintln!("[knobyte mcp] {}", profile_line);
+                start_stdio_server_with(resolved.profile)?;
             } else {
                 let transport = match (http, sse) {
                     (true, _) => HttpTransport::StreamableHttp,
                     (_, true) => HttpTransport::Sse,
                     _ => HttpTransport::Both,
                 };
-                start_http_server(&host, port, transport).await?;
+                println!("{} Using {}", "[mcp]".cyan().bold(), profile_line);
+                let options = SseServerOptions {
+                    token: std::env::var(knobyte::mcp::TOKEN_ENV_VAR).ok(),
+                    transport,
+                    profile: Some(resolved.profile),
+                };
+                start_sse_server_with_options(&host, port, options).await?;
             }
         }
         Some(Commands::Pattern { sub }) => match sub {
@@ -2094,6 +2120,7 @@ fn print_commands() {
             ("knobyte hub [--port] [--host] [--token] [--no-open]", "Project Hub web interface (prints a one-time sign-in link)"),
             ("knobyte mcp [--http|--sse] [--port 3005] [--token]", "HTTP MCP server: /mcp and /sse by default (127.0.0.1)"),
             ("knobyte mcp --stdio", "stdio MCP server for Cursor / Claude Desktop"),
+            ("knobyte mcp --profile core|team|wiki|graph|full", "Tool profile to list (default core)"),
             ("knobyte commands", "Print this list"),
         ]),
     ];

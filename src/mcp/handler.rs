@@ -5,7 +5,8 @@ use serde_json::{json, Value};
 use crate::config::KnobyteConfig;
 use crate::mcp::protocol::{CallToolResult, JsonRpcRequest, JsonRpcResponse};
 use crate::mcp::security::validate_id;
-use crate::mcp::tools::{execute_tool_with_config, get_tools_list};
+use crate::mcp::profiles::{canonical_tool, out_of_profile_message, McpProfile};
+use crate::mcp::tools::{execute_tool_with_config, is_known_tool, tools_for_profile, DATALOG_REFERENCE, DATALOG_REFERENCE_URI};
 
 /// Protocol revisions this server can speak, oldest first.
 pub const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18"];
@@ -34,9 +35,9 @@ pub fn process_jsonrpc_request(req: JsonRpcRequest) -> Option<JsonRpcResponse> {
 
 /// Process a raw JSON-RPC text payload (single message or batch).
 /// Returns the serialized response, or `None` when nothing must be sent back.
-pub fn handle_text(text: &str, config: &KnobyteConfig) -> Option<String> {
+pub fn handle_text(text: &str, config: &KnobyteConfig, profile: McpProfile) -> Option<String> {
     match serde_json::from_str::<Value>(text) {
-        Ok(v) => handle_value(v, config).map(|r| r.to_string()),
+        Ok(v) => handle_value(v, config, profile).map(|r| r.to_string()),
         Err(e) => Some(
             serde_json::to_string(&JsonRpcResponse::error(
                 Some(Value::Null),
@@ -49,7 +50,7 @@ pub fn handle_text(text: &str, config: &KnobyteConfig) -> Option<String> {
 }
 
 /// Process a parsed JSON-RPC payload (single message or batch).
-pub fn handle_value(value: Value, config: &KnobyteConfig) -> Option<Value> {
+pub fn handle_value(value: Value, config: &KnobyteConfig, profile: McpProfile) -> Option<Value> {
     match value {
         Value::Array(items) => {
             if items.is_empty() {
@@ -57,7 +58,7 @@ pub fn handle_value(value: Value, config: &KnobyteConfig) -> Option<Value> {
             }
             let responses: Vec<Value> = items
                 .into_iter()
-                .filter_map(|item| handle_single(item, config))
+                .filter_map(|item| handle_single(item, config, profile))
                 .collect();
             if responses.is_empty() {
                 None
@@ -65,7 +66,7 @@ pub fn handle_value(value: Value, config: &KnobyteConfig) -> Option<Value> {
                 Some(Value::Array(responses))
             }
         }
-        other => handle_single(other, config),
+        other => handle_single(other, config, profile),
     }
 }
 
@@ -84,7 +85,7 @@ fn invalid_request(id: Value, msg: &str) -> Value {
     serde_json::to_value(JsonRpcResponse::error(Some(id), INVALID_REQUEST, msg)).unwrap_or_default()
 }
 
-fn handle_single(value: Value, config: &KnobyteConfig) -> Option<Value> {
+fn handle_single(value: Value, config: &KnobyteConfig, profile: McpProfile) -> Option<Value> {
     if !value.is_object() {
         return Some(invalid_request(Value::Null, "Invalid Request"));
     }
@@ -100,7 +101,7 @@ fn handle_single(value: Value, config: &KnobyteConfig) -> Option<Value> {
                     .id
                     .map(|id| invalid_request(id, "Invalid Request: jsonrpc must be \"2.0\""));
             }
-            process_jsonrpc_request_with_config(req, config)
+            process_jsonrpc_request_with_profile(req, config, profile)
                 .map(|r| serde_json::to_value(r).unwrap_or_default())
         }
         // A malformed notification (no id) gets no reply.
@@ -123,9 +124,19 @@ pub fn negotiate_protocol_version(params: Option<&Value>) -> &'static str {
     }
 }
 
-/// Dispatch one JSON-RPC message. Messages without an `id` are notifications
-/// and never produce a response.
+/// Dispatch one JSON-RPC message with the tool profile configured for the project
+/// (`KNOBYTE_MCP_PROFILE`, then `mcp.profile` in config.json, else `core`). Messages without
+/// an `id` are notifications and never produce a response.
 pub fn process_jsonrpc_request_with_config(req: JsonRpcRequest, config: &KnobyteConfig) -> Option<JsonRpcResponse> {
+    process_jsonrpc_request_with_profile(req, config, McpProfile::configured(&config.scaffold_root))
+}
+
+/// Dispatch one JSON-RPC message, listing and accepting only the tools of `profile`.
+pub fn process_jsonrpc_request_with_profile(
+    req: JsonRpcRequest,
+    config: &KnobyteConfig,
+    profile: McpProfile,
+) -> Option<JsonRpcResponse> {
     let id = match req.id.clone() {
         Some(Value::Null) | None => {
             // Notifications (e.g. notifications/initialized, notifications/cancelled)
@@ -134,13 +145,23 @@ pub fn process_jsonrpc_request_with_config(req: JsonRpcRequest, config: &Knobyte
         }
         Some(id) => id,
     };
-    Some(dispatch(req, Some(id), config))
+    Some(dispatch(req, Some(id), config, profile))
 }
 
-fn dispatch(req: JsonRpcRequest, id: Option<Value>, config: &KnobyteConfig) -> JsonRpcResponse {
-    match req.method.as_str() {
-        "initialize" => {
-            let instructions = "\
+/// The `initialize` instructions for `profile`.
+pub fn server_instructions(profile: McpProfile) -> String {
+    let mut text = String::from(BASE_INSTRUCTIONS);
+    text.push_str(&format!(
+        "\nActive tool profile: {} ({} tools; {}). Other profiles: {}. Start the server with `knobyte mcp --profile <name>` for more tools.",
+        profile,
+        profile.tool_names().len(),
+        profile.summary(),
+        McpProfile::ALL.iter().filter(|p| **p != profile).map(|p| p.name()).collect::<Vec<_>>().join(", ")
+    ));
+    text
+}
+
+const BASE_INSTRUCTIONS: &str = "\
 Knobyte Agent Operating Rules:\n\
 1. On session start, call `knobyte_session_start` to review open workstreams, current steps, dirty files, and team handoffs.\n\
 2. Always read context (`context/stack.md`, `AGENTS.md`, `ROUTER.md`) before writing code.\n\
@@ -148,6 +169,11 @@ Knobyte Agent Operating Rules:\n\
 4. Checkpoint your work using `knobyte_workstream_step_update` whenever a step status changes or tests pass, so progress survives interruptions.\n\
 5. Log key architectural decisions, discovered invariants, and risks with `knobyte_log`.\n\
 6. At session end, use `knobyte_relay_draft` to leave a structured handoff for the next session or collaborator. Drafts are reviewed and published by a human.";
+
+fn dispatch(req: JsonRpcRequest, id: Option<Value>, config: &KnobyteConfig, profile: McpProfile) -> JsonRpcResponse {
+    match req.method.as_str() {
+        "initialize" => {
+            let instructions = server_instructions(profile);
 
             let result = json!({
                 "protocolVersion": negotiate_protocol_version(req.params.as_ref()),
@@ -158,22 +184,27 @@ Knobyte Agent Operating Rules:\n\
                 },
                 "serverInfo": {
                     "name": crate::version::APP_NAME,
-                    "version": crate::version::VERSION
+                    "version": crate::version::VERSION,
+                    "profile": profile.name()
                 },
                 "instructions": instructions
             });
             JsonRpcResponse::success(id, result)
         }
         "ping" => JsonRpcResponse::success(id, json!({})),
-        "tools/list" => JsonRpcResponse::success(id, json!({ "tools": get_tools_list() })),
+        "tools/list" => JsonRpcResponse::success(id, json!({ "tools": tools_for_profile(profile) })),
         "tools/call" => {
             let params = req.params.unwrap_or_default();
             let name = match params.get("name").and_then(|v| v.as_str()) {
                 Some(n) => n,
                 None => return JsonRpcResponse::error(id, INVALID_PARAMS, "'name' parameter is required"),
             };
-            if !get_tools_list().iter().any(|t| t.name == name) {
+            if !is_known_tool(name) {
                 return JsonRpcResponse::error(id, INVALID_PARAMS, &format!("Unknown tool: {}", name));
+            }
+            // Retired names resolve to their merged tool before the profile check.
+            if !profile.includes(canonical_tool(name)) {
+                return JsonRpcResponse::error(id, INVALID_PARAMS, &out_of_profile_message(name, profile));
             }
             let arguments = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
             let result: CallToolResult = execute_tool_with_config(name, &arguments, config);
@@ -210,6 +241,12 @@ Knobyte Agent Operating Rules:\n\
                     "name": "Decisions & Discoveries Log",
                     "description": "Recorded architectural decisions, risks, and discoveries",
                     "mimeType": "application/jsonl"
+                }),
+                json!({
+                    "uri": DATALOG_REFERENCE_URI,
+                    "name": "Datalog Schema Reference",
+                    "description": "Relations, vector indices and example queries for knobyte_cozo_datalog",
+                    "mimeType": "text/markdown"
                 }),
             ];
 
@@ -263,7 +300,9 @@ Knobyte Agent Operating Rules:\n\
                 None => return JsonRpcResponse::error(id, INVALID_PARAMS, "'uri' parameter is required"),
             };
 
-            let (text, mime) = if uri == "knobyte://context/stack" {
+            let (text, mime) = if uri == DATALOG_REFERENCE_URI {
+                (DATALOG_REFERENCE.to_string(), "text/markdown")
+            } else if uri == "knobyte://context/stack" {
                 let path = config.context_dir().join("stack.md");
                 (std::fs::read_to_string(&path).unwrap_or_default(), "text/markdown")
             } else if uri == "knobyte://scaffold/AGENTS" {

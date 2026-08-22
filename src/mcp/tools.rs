@@ -11,6 +11,7 @@ use crate::events::{
 };
 use crate::graph::GraphEngine;
 use crate::heartbeat::check_heartbeat;
+use crate::mcp::profiles::McpProfile;
 use crate::mcp::protocol::{CallToolResult, Tool};
 use crate::mcp::security::{check_project_root_arg, resolve_confined_path, validate_id};
 use crate::team::identity::resolve_actor;
@@ -41,19 +42,22 @@ fn string_array_schema(description: &str) -> Value {
 
 /// Agent protocol v3 budget/detail properties shared by the graph tools. Supplying any of them
 /// switches the tool to protocol v3 records (meta first, summary last) under a hard token budget.
-fn agent_budget_properties(props: &mut serde_json::Map<String, Value>) {
-    props.insert("detail".into(), json!({ "type": "string", "enum": ["minimal", "standard", "source"], "description": "Detail level (protocol v3)." }));
-    props.insert("max_nodes".into(), json!({ "type": "integer", "minimum": 0, "description": "Maximum nodes to return." }));
-    props.insert("max_files".into(), json!({ "type": "integer", "minimum": 0, "description": "Maximum source files (scope)." }));
-    props.insert("max_flow_steps".into(), json!({ "type": "integer", "minimum": 0, "description": "Maximum directed flow steps (scope)." }));
-    props.insert("max_output_tokens".into(), json!({ "type": "integer", "minimum": 1, "description": "Hard output token ceiling (estimated)." }));
+/// `scope` adds the scope-only bounds (`max_files`, `max_flow_steps`).
+fn agent_budget_properties(props: &mut serde_json::Map<String, Value>, scope: bool) {
+    props.insert("detail".into(), json!({ "type": "string", "enum": ["minimal", "standard", "source"], "description": "Detail level. Any detail/max_* option returns budgeted v3 records." }));
+    props.insert("max_nodes".into(), json!({ "type": "integer", "minimum": 0 }));
+    if scope {
+        props.insert("max_files".into(), json!({ "type": "integer", "minimum": 0 }));
+        props.insert("max_flow_steps".into(), json!({ "type": "integer", "minimum": 0 }));
+    }
+    props.insert("max_output_tokens".into(), json!({ "type": "integer", "minimum": 1, "description": "Estimated output token ceiling." }));
     props.insert("max_source_lines".into(), json!({ "type": "integer", "minimum": 1, "description": "Per-node source line cap." }));
-    props.insert("fingerprint".into(), json!({ "type": "boolean", "description": "Attach body hashes and MinHash fingerprints to facts." }));
+    props.insert("fingerprint".into(), json!({ "type": "boolean", "description": "Attach body hashes and MinHash fingerprints." }));
 }
 
-fn with_budget(mut schema: Value) -> Value {
+fn with_budget(mut schema: Value, scope: bool) -> Value {
     if let Some(props) = schema.get_mut("properties").and_then(|p| p.as_object_mut()) {
-        agent_budget_properties(props);
+        agent_budget_properties(props, scope);
     }
     schema
 }
@@ -81,51 +85,95 @@ fn agent_input(args: &Value) -> Result<Option<crate::graph::protocol::AgentOptio
     Ok(input.any_set().then_some(input))
 }
 
-/// All tools exposed by the server. Every tool operates on the project the
-/// server was started in; there is intentionally no tool that approves or
-/// rejects inbox proposals or publishes relays (human-only actions).
+/// Read-only Datalog reference served as the `knobyte://reference/datalog-schema` resource.
+pub const DATALOG_REFERENCE_URI: &str = "knobyte://reference/datalog-schema";
+
+/// Markdown body of [`DATALOG_REFERENCE_URI`]: the stored relations, indices and examples.
+pub const DATALOG_REFERENCE: &str = "\
+# Knobyte CozoScript reference
+
+`knobyte_cozo_datalog` runs read-only CozoScript. Mutations (`:put`, `:rm`, `:create`, ...) are refused.
+
+## Stored relations
+
+- `code_nodes{id: String => file_path: String, kind: String, name: String, start_line: Int, end_line: Int, body_hash: String, embedding: <F32; D>, qualified_name: String}`
+- `code_edges{source_id: String, target_id: String, kind: String => file_path: String}`
+  - kind: calls, calls_trait_method, possible_call, instantiates, imports, implements, impl_of, extends, overrides, returns, type_of, decorates, references, contains, exports (contains/exports are structural, not dependencies)
+- `wiki_entities{id: String => title: String, path: String, tags: [String], summary: String, embedding: <F32; D>}`
+- `embedding_meta{relation: String => embedder_id: String, dim: Int}` (which embedder built each vector relation)
+
+## HNSW indices (cosine)
+
+`code_nodes:node_vec` and `wiki_entities:wiki_vec` over `embedding`. D depends on the embedding backend (128 for `hashed`, the model dimension for `model2vec`, e.g. 256); read it from `embedding_meta`. For text queries use `knobyte_vector_search`, which embeds the query with the same backend.
+
+## Examples
+
+```
+?[name, kind, file_path, start_line] := *code_nodes{name, kind, file_path, start_line, qualified_name}, qualified_name == 'CozoEngine::open'
+?[caller, callee] := *code_edges{source_id: s, target_id: t, kind: 'calls'}, *code_nodes{id: s, name: caller}, *code_nodes{id: t, name: callee}
+?[relation, embedder_id, dim] := *embedding_meta{relation, embedder_id, dim}
+```
+";
+
+/// Every tool exposed by the server, in `tools/list` order (see
+/// [`crate::mcp::profiles::TOOL_PROFILES`]). Every tool operates on the project the server was
+/// started in; there is intentionally no tool that approves or rejects inbox proposals,
+/// publishes relays, or publishes/archives playbooks (human-only actions).
 pub fn get_tools_list() -> Vec<Tool> {
+    let mut defs = tool_definitions();
+    let mut out = Vec::with_capacity(defs.len());
+    for (name, _) in crate::mcp::profiles::TOOL_PROFILES {
+        if let Some(pos) = defs.iter().position(|t| t.name == *name) {
+            out.push(defs.remove(pos));
+        }
+    }
+    out.extend(defs);
+    out
+}
+
+/// The tools listed under `profile`, in `tools/list` order.
+pub fn tools_for_profile(profile: McpProfile) -> Vec<Tool> {
+    get_tools_list().into_iter().filter(|t| profile.includes(&t.name)).collect()
+}
+
+/// Whether `name` (a tool or a retired alias) can be called at all.
+pub fn is_known_tool(name: &str) -> bool {
+    crate::mcp::profiles::alias(name).is_some() || crate::mcp::profiles::TOOL_PROFILES.iter().any(|(t, _)| *t == name)
+}
+
+fn tool_definitions() -> Vec<Tool> {
     let kinds: Vec<&str> = EVENT_KINDS.to_vec();
+    let evidence = "Evidence: file:<path>, commit:<sha>, entity:<id>, external:<uri>, or free text.";
     vec![
         tool(
             "knobyte_vector_search",
-            "Similarity search over indexed code nodes or wiki entities using CozoDB HNSW vector indices. Embeddings come from the project's configured local backend: 'hashed' (default; 128-dim hashed lexical features, matches shared identifiers/words) or 'model2vec' (local Model2Vec static embedding model, e.g. 256-dim potion-base-8M, captures semantic similarity). Nothing is sent over the network. Code matches include file_path, kind, name, qualified_name, lines and a readable ref (kind:path:qualified_name). Returns up to k ranked matches (fewer only when fewer candidates clear the relevance floor; belowFloor counts the k nearest candidates the floor left out, lower it with minScore), the embedder used, and index freshness metadata. If the index was built with a different backend it is re-embedded first. Read-only.",
+            "Similarity search over code symbols or wiki entities with the project's local embeddings (nothing leaves the machine). Returns up to k ranked matches with readable refs, the embedder used and index freshness. Read-only.",
             json!({
                 "type": "object",
                 "required": ["query"],
                 "properties": {
-                    "query": { "type": "string", "description": "Text query or code snippet to search for." },
+                    "query": { "type": "string", "description": "Text query or code snippet." },
                     "target": { "type": "string", "enum": ["code", "wiki"], "default": "code", "description": "Which index to search." },
-                    "k": { "type": "integer", "minimum": 1, "default": 10, "description": "Number of nearest neighbors to return." },
-                    "minScore": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.2, "description": "Relevance floor (score = 1 - cosine distance). 0 disables it." }
+                    "k": { "type": "integer", "minimum": 1, "default": 10, "description": "Number of matches to return." },
+                    "minScore": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.2, "description": "Relevance floor (1 - cosine distance); belowFloor counts candidates it left out. 0 disables it." }
                 }
             }),
         ),
         tool(
             "knobyte_cozo_datalog",
-            "Run a read-only CozoScript Datalog query over the code graph relations, HNSW vector indices, and wiki entities. Mutations (:put, :rm, :create, ...) are not permitted.\n\
-                Stored Relations:\n\
-                - code_nodes{id: String => file_path: String, kind: String, name: String, start_line: Int, end_line: Int, body_hash: String, embedding: <F32; D>, qualified_name: String}\n\
-                - code_edges{source_id: String, target_id: String, kind: String => file_path: String}  (kind: calls, calls_trait_method, possible_call, instantiates, imports, implements, impl_of, extends, overrides, returns, type_of, decorates, references, contains, exports; contains/exports are structural, not dependencies)\n\
-                - wiki_entities{id: String => title: String, path: String, tags: [String], summary: String, embedding: <F32; D>}\n\
-                - embedding_meta{relation: String => embedder_id: String, dim: Int}  (which embedder built each vector relation)\n\
-                HNSW indices (cosine): code_nodes:node_vec and wiki_entities:wiki_vec over `embedding`. D depends on the active embedding backend (128 for 'hashed', the model dimension for 'model2vec', e.g. 256); read it from embedding_meta. For text queries use knobyte_vector_search, which embeds the query with the same backend.\n\
-                Examples:\n\
-                  ?[name, kind, file_path, start_line] := *code_nodes{name, kind, file_path, start_line, qualified_name}, qualified_name == 'CozoEngine::open'\n\
-                  ?[caller, callee] := *code_edges{source_id: s, target_id: t, kind: 'calls'}, *code_nodes{id: s, name: caller}, *code_nodes{id: t, name: callee}\n\
-                  ?[relation, embedder_id, dim] := *embedding_meta{relation, embedder_id, dim}",
+            "Run a read-only CozoScript Datalog query over the code graph, vector indices and wiki relations. Relation schemas and examples: resource knobyte://reference/datalog-schema.",
             json!({
                 "type": "object",
                 "required": ["script"],
                 "properties": {
-                    "script": { "type": "string", "description": "Read-only CozoScript Datalog query." },
-                    "params": { "type": "object", "description": "JSON map of named query parameters ($name in the script)." }
+                    "script": { "type": "string", "description": "Read-only CozoScript (mutations are refused). Relations: code_nodes, code_edges, wiki_entities, embedding_meta." },
+                    "params": { "type": "object", "description": "Named query parameters ($name in the script)." }
                 }
             }),
         ),
         tool(
             "knobyte_cozo_pagerank",
-            "Compute PageRank centrality over code dependency edges in CozoDB to find the most central symbols. Read-only.",
+            "Rank code symbols by PageRank centrality over dependency edges. Read-only.",
             json!({
                 "type": "object",
                 "properties": {
@@ -136,61 +184,62 @@ pub fn get_tools_list() -> Vec<Tool> {
         ),
         tool(
             "knobyte_cozo_shortest_path",
-            "Find the shortest dependency path between two code symbols in CozoDB. Accepts node IDs, symbol names, or readable refs (kind:path:qualified_name); ambiguous names return an error listing candidates. Returns the path steps, or null when no path exists. Read-only.",
+            "Shortest dependency path between two code symbols (null when none exists). Read-only.",
             json!({
                 "type": "object",
                 "required": ["start", "target"],
                 "properties": {
-                    "start": { "type": "string", "description": "Starting symbol: node ID, name, or readable ref." },
-                    "target": { "type": "string", "description": "Target symbol: node ID, name, or readable ref." }
+                    "start": { "type": "string", "description": "Node ID, symbol name or readable ref (kind:path:qualified_name); ambiguous names list candidates." },
+                    "target": { "type": "string", "description": "Node ID, symbol name or readable ref." }
                 }
             }),
         ),
         tool(
             "knobyte_check",
-            "Run a drift check on the Knobyte scaffold and return a DriftReport (score, issues, file count). With fix=true, first relocates drifted grounding anchors (writes scaffold files) and includes the sync result.",
+            "Run a drift check on the scaffold and return the report (score, issues, file count). fix=true first relocates drifted grounding anchors (dryRun previews them).",
             json!({
                 "type": "object",
                 "properties": {
-                    "fix": { "type": "boolean", "default": false, "description": "Heal drifted grounding anchors before checking (modifies scaffold files)." }
+                    "fix": { "type": "boolean", "default": false, "description": "Heal drifted grounding anchors before checking (writes scaffold files)." },
+                    "dryRun": { "type": "boolean", "default": false, "description": "With fix: only preview the relocations; nothing is written." }
                 }
             }),
         ),
         tool(
             "knobyte_log",
-            "Read recent project events, or append an event (decision, discovery, note, risk, todo) to the decisions log with optional tags, referenced files, and actor.",
+            "Read recent project events, or append one (decision, discovery, note, risk, todo) as the current actor.",
             json!({
                 "type": "object",
                 "properties": {
-                    "action": { "type": "string", "enum": ["read", "write"], "default": "read", "description": "'read' returns recent events; 'write' appends one." },
-                    "kind": { "type": "string", "enum": kinds, "default": "note", "description": "Event kind (write)." },
-                    "summary": { "type": "string", "description": "Human-readable event summary (required for write)." },
-                    "details": { "type": "string", "description": "Optional longer description (write)." },
-                    "tags": string_array_schema("Tags for the event (write)."),
-                    "files": string_array_schema("Repository files the event refers to (write)."),
-                    "actor": { "type": "string", "description": "Optional check (write): must equal the current actor; events are always recorded as the current actor." },
-                    "limit": { "type": "integer", "minimum": 1, "maximum": MAX_TIMELINE_LIMIT, "default": 20, "description": "Maximum events to return (read); output is capped at 64 KiB." }
+                    "action": { "type": "string", "enum": ["read", "write"], "default": "read" },
+                    "kind": { "type": "string", "enum": kinds, "default": "note" },
+                    "summary": { "type": "string", "description": "Event summary (required for write)." },
+                    "details": { "type": "string" },
+                    "tags": string_array_schema("Tags."),
+                    "files": string_array_schema("Repository files the event refers to."),
+                    "actor": { "type": "string", "description": "Optional check: must equal the current actor." },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": MAX_TIMELINE_LIMIT, "default": 20, "description": "Events to read (output capped at 64 KiB)." }
                 }
             }),
         ),
         tool(
             "knobyte_timeline",
-            "Search historical project events, filtered by text query, kind, referenced file, or start time.",
+            "Search historical project events by text, kind, referenced file or start time.",
             json!({
                 "type": "object",
                 "properties": {
-                    "query": { "type": "string", "description": "Search text in summary, tags, or details." },
+                    "query": { "type": "string", "description": "Text in summary, tags or details." },
                     "kind": { "type": "string", "enum": kinds },
-                    "file": { "type": "string", "description": "Filter by referenced file." },
-                    "since": { "type": "string", "format": "date-time", "description": "Only events at or after this RFC 3339 timestamp." },
-                    "includeSuperseded": { "type": "boolean", "default": false, "description": "Include events superseded by later ones." },
-                    "limit": { "type": "integer", "minimum": 1, "maximum": MAX_TIMELINE_LIMIT, "default": 50, "description": "Maximum events (1-200); output is capped at 64 KiB with an omitted note." }
+                    "file": { "type": "string", "description": "Referenced file." },
+                    "since": { "type": "string", "format": "date-time", "description": "RFC 3339 lower bound." },
+                    "includeSuperseded": { "type": "boolean", "default": false },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": MAX_TIMELINE_LIMIT, "default": 50, "description": "Output capped at 64 KiB." }
                 }
             }),
         ),
         tool(
             "knobyte_heartbeat",
-            "Check scaffold health: overall status, stale scaffold files with their age in days, and memory cleanup status.",
+            "Scaffold health: overall status, stale scaffold files with their age in days, and memory cleanup status.",
             json!({
                 "type": "object",
                 "properties": {
@@ -200,7 +249,7 @@ pub fn get_tools_list() -> Vec<Tool> {
         ),
         tool(
             "knobyte_read_file",
-            "Read a text file inside the Knobyte scaffold directory (.knobyte/). The path must be relative to the scaffold root (e.g. 'AGENTS.md', 'context/stack.md'); absolute paths, '..' and symlinks leaving the scaffold are rejected.",
+            "Read a text file inside the scaffold directory (.knobyte/), e.g. 'AGENTS.md' or 'context/stack.md'. Paths leaving the scaffold are rejected.",
             json!({
                 "type": "object",
                 "required": ["file"],
@@ -211,132 +260,97 @@ pub fn get_tools_list() -> Vec<Tool> {
         ),
         tool(
             "knobyte_graph_query",
-            "Query structural relationships in the code graph: where a symbol is defined, who calls it, or who imports it. Includes index freshness metadata.",
-            with_budget(json!({
-                "type": "object",
-                "required": ["relation", "target"],
-                "properties": {
-                    "relation": { "type": "string", "enum": ["where-defined", "who-calls", "what-calls", "who-imports"] },
-                    "target": { "type": "string", "description": "Symbol name, function name, or module path." }
-                }
-            })),
+            "Find where a symbol is defined, who calls it, what it calls, or who imports it, with index freshness.",
+            with_budget(
+                json!({
+                    "type": "object",
+                    "required": ["relation", "target"],
+                    "properties": {
+                        "relation": { "type": "string", "enum": ["where-defined", "who-calls", "what-calls", "who-imports"] },
+                        "target": { "type": "string", "description": "Symbol, function or module path." }
+                    }
+                }),
+                false,
+            ),
         ),
         tool(
             "knobyte_graph_scope",
-            "Retrieve the symbols, definitions, and code neighborhood most relevant to a natural-language task, with explanations and freshness metadata.",
-            with_budget(json!({
-                "type": "object",
-                "required": ["task"],
-                "properties": {
-                    "task": { "type": "string", "description": "Natural language task or query description." },
-                    "wiki": { "type": "boolean", "description": "Attach wiki entities grounded to the returned nodes (protocol v3)." },
-                    "hybrid": { "type": "boolean", "description": "Re-rank with Cozo vector similarity (protocol v3; optional)." }
-                }
-            })),
+            "Find the symbols, definitions and code neighbourhood most relevant to a natural-language task, with explanations and freshness.",
+            with_budget(
+                json!({
+                    "type": "object",
+                    "required": ["task"],
+                    "properties": {
+                        "task": { "type": "string", "description": "Natural-language task." },
+                        "wiki": { "type": "boolean", "description": "Attach wiki entities grounded to the returned nodes." },
+                        "hybrid": { "type": "boolean", "description": "Re-rank with vector similarity." }
+                    }
+                }),
+                true,
+            ),
         ),
         tool(
             "knobyte_graph_get",
             "Get source definitions and metadata for code graph nodes by ID.",
-            with_budget(json!({
-                "type": "object",
-                "required": ["ids"],
-                "properties": {
-                    "ids": string_array_schema("Code node IDs or grounding references.")
-                }
-            })),
+            with_budget(
+                json!({
+                    "type": "object",
+                    "required": ["ids"],
+                    "properties": {
+                        "ids": string_array_schema("Code node IDs or grounding references.")
+                    }
+                }),
+                false,
+            ),
         ),
         tool(
             "knobyte_graph_status",
-            "Get the code graph index status (node count, edge count, last indexed time) plus working-tree freshness.",
+            "Code graph index status (node and edge counts, last indexed) plus working-tree freshness.",
             json!({ "type": "object", "properties": {} }),
         ),
         tool(
-            "knobyte_wiki_query",
-            "Ranked search over wiki entities (architecture notes, decisions, conventions). Bounded and paged: returns compact summaries (archived hidden) with `truncated` and `nextOffset`; set includeBody for full bodies. Empty text lists entities.",
-            json!({
-                "type": "object",
-                "required": ["text"],
-                "properties": {
-                    "text": { "type": "string", "description": "Search query keywords (empty lists entities)." },
-                    "type": { "type": "array", "items": { "type": "string" }, "description": "Only these entity types." },
-                    "status": { "type": "array", "items": { "type": "string" }, "description": "Only these lifecycle states." },
-                    "topic": { "type": "string", "description": "Only members of this topic." },
-                    "includeArchived": { "type": "boolean", "description": "Include archived entities (default false)." },
-                    "includeBody": { "type": "boolean", "description": "Include each entity's full body (default false)." },
-                    "limit": { "type": "integer", "description": "Page size (default 50, max 500)." },
-                    "offset": { "type": "integer", "description": "Items to skip (use nextOffset)." }
-                }
-            }),
-        ),
-        tool(
-            "knobyte_wiki_show",
-            "Get the full details of one wiki entity by ID (e.g. 'kb_stack').",
-            json!({
-                "type": "object",
-                "required": ["id"],
-                "properties": {
-                    "id": { "type": "string", "description": "Entity ID." }
-                }
-            }),
-        ),
-        tool(
-            "knobyte_wiki_list",
-            "List wiki entities: bounded and paged compact summaries (archived and shadowed duplicates hidden by default) with `truncated` and `nextOffset`. Set includeBody for full bodies.",
-            json!({
-                "type": "object",
-                "properties": {
-                    "type": { "type": "array", "items": { "type": "string" }, "description": "Only these entity types." },
-                    "status": { "type": "array", "items": { "type": "string" }, "description": "Only these lifecycle states." },
-                    "topic": { "type": "string", "description": "Only members of this topic." },
-                    "includeArchived": { "type": "boolean", "description": "Include archived entities (default false)." },
-                    "includeBody": { "type": "boolean", "description": "Include each entity's full body (default false)." },
-                    "limit": { "type": "integer", "description": "Page size (default 50, max 500)." },
-                    "offset": { "type": "integer", "description": "Items to skip (use nextOffset)." }
-                }
-            }),
-        ),
-        tool(
             "knobyte_wiki_get",
-            "Get one wiki entity by id from a snapshot-bound read session: metadata, relations, groundings with derived health, backlinks and source location, plus the index state (fresh, stale, degraded, migration_required, ...). The body is opt-in (includeBody). Relations and backlinks are bounded (limit, default 25) and paged: relationsPage / backlinksPage report total, truncated and nextOffset. Read-only. Answers are the wiki envelope {schemaVersion, ok, data, diagnostics}.",
+            "Get one wiki entity by id: metadata, relations, backlinks, groundings with derived health, and index state; the body is opt-in. Read-only.",
             json!({
                 "type": "object",
                 "required": ["id"],
                 "properties": {
                     "id": { "type": "string", "description": "Entity id (e.g. 'kb_stack')." },
-                    "includeBody": { "type": "boolean", "description": "Include the entity's Markdown body (default false)." },
+                    "includeBody": { "type": "boolean", "description": "Include the Markdown body (default false)." },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 200, "description": "Page size for relations and backlinks (default 25)." },
-                    "relationsOffset": { "type": "integer", "minimum": 0, "description": "Skip this many outgoing relations (relationsPage.nextOffset)." },
-                    "backlinksOffset": { "type": "integer", "minimum": 0, "description": "Skip this many backlinks (backlinksPage.nextOffset)." }
+                    "relationsOffset": { "type": "integer", "minimum": 0, "description": "relationsPage.nextOffset of the previous page." },
+                    "backlinksOffset": { "type": "integer", "minimum": 0, "description": "backlinksPage.nextOffset of the previous page." }
                 }
             }),
         ),
         tool(
             "knobyte_wiki_search",
-            "Ranked, bounded and paged wiki search (id > title > summary > body) over one index snapshot. Pass `nextCursor` back as `cursor` for the next page; a cursor is refused once the wiki changed (REVISION_CONFLICT: start over). Empty query lists entities. Read-only.",
+            "Ranked, paged search over wiki entities (architecture notes, decisions, conventions); omit query to list them. Read-only.",
             json!({
                 "type": "object",
                 "properties": {
-                    "query": { "type": "string", "description": "Search text (max 256 characters; empty lists entities)." },
+                    "query": { "type": "string", "description": "Search text (max 256 characters); empty or omitted lists entities." },
                     "type": { "type": "array", "items": { "type": "string" }, "description": "Only these entity types." },
                     "status": { "type": "array", "items": { "type": "string" }, "description": "Only these lifecycle states." },
                     "topic": { "type": "string", "description": "Only members of this topic." },
                     "includeArchived": { "type": "boolean", "description": "Include archived entities (default false)." },
-                    "limit": { "type": "integer", "minimum": 1, "maximum": 100, "description": "Page size (default 25, max 100)." },
+                    "includeBody": { "type": "boolean", "description": "Attach each entity's Markdown body (default false)." },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 100, "description": "Page size (default 25)." },
                     "maxTokens": { "type": "integer", "minimum": 64, "description": "Token budget for the page (default 4000)." },
-                    "cursor": { "type": "string", "description": "nextCursor from the previous page of this exact request." }
+                    "cursor": { "type": "string", "description": "nextCursor of the previous page of this exact request (refused once the wiki changed)." }
                 }
             }),
         ),
         tool(
             "knobyte_wiki_neighborhood",
-            "Bounded neighbourhood of a wiki entity: breadth-first over typed relations, limited by depth (1-5), entity count (1-100) and a token budget, with `truncated` when a bound cut it. Choose direction (outgoing, incoming, both) and relationTypes. Read-only.",
+            "Breadth-first neighbourhood of a wiki entity over typed relations, bounded by depth, entity count and token budget. Read-only.",
             json!({
                 "type": "object",
                 "required": ["id"],
                 "properties": {
                     "id": { "type": "string", "description": "Root entity id." },
                     "direction": { "type": "string", "enum": ["outgoing", "incoming", "both"], "description": "Edge direction (default both)." },
-                    "relationTypes": { "type": "array", "items": { "type": "string" }, "description": "Only these relation types (e.g. depends_on, implements)." },
+                    "relationTypes": { "type": "array", "items": { "type": "string" }, "description": "Only these relation types (e.g. depends_on)." },
                     "depth": { "type": "integer", "minimum": 1, "maximum": 5, "description": "Hops (default 2)." },
                     "maxEntities": { "type": "integer", "minimum": 1, "maximum": 100, "description": "Entities reached (default 25)." },
                     "maxTokens": { "type": "integer", "minimum": 64, "description": "Token budget (default 4000)." },
@@ -346,7 +360,7 @@ pub fn get_tools_list() -> Vec<Tool> {
         ),
         tool(
             "knobyte_wiki_validate",
-            "Validate the wiki Markdown (works without an index): ids, types, lifecycle, relations, topics, sources, groundings (GROUNDING_MIXED_SHAPE, ANCHOR_GROUNDING_MISMATCH, ...). Diagnostics carry code, severity, remediation and a location (line, column, span); filter by entityIds or paths. Also reports the index state. Read-only.",
+            "Validate the wiki Markdown (no index needed) and return located diagnostics with remediation, plus the index state. Read-only.",
             json!({
                 "type": "object",
                 "properties": {
@@ -357,31 +371,20 @@ pub fn get_tools_list() -> Vec<Tool> {
             }),
         ),
         tool(
-            "knobyte_wiki_grounding_status",
-            "Grounding status of one wiki entity: each code reference with its origin (frontmatter or inline anchor), derived health (fresh, unverified, ambiguous, changed, missing) and committed baseline. Read-only.",
-            json!({
-                "type": "object",
-                "required": ["id"],
-                "properties": {
-                    "id": { "type": "string", "description": "Entity id." }
-                }
-            }),
-        ),
-        tool(
             "knobyte_wiki_plan_operation",
-            "Dry-run typed wiki operations (create-entry, update-entry, set-property, add-relation, remove-relation, add-source, remove-source, set-grounding, supersede-entry, move-entry, archive-entry) and return the planned diffs plus an opaque plan `handle` (valid 15 minutes, single use) when they apply cleanly. Nothing is written. Pass the handle to knobyte_wiki_apply_operation.",
+            "Dry-run typed wiki operations and return the planned diffs plus a single-use plan handle (15 minutes) for knobyte_wiki_apply_operation. Nothing is written.",
             json!({
                 "type": "object",
                 "properties": {
-                    "operations": { "type": "array", "items": { "type": "object" }, "description": "Operation envelopes: {type, entityId, payload, reason?, opId?}." },
-                    "operation": { "type": "object", "description": "A single operation envelope (alternative to `operations`)." },
+                    "operations": { "type": "array", "items": { "type": "object" }, "description": "Operation envelopes {type, entityId, payload, reason?, opId?}; type is create-entry, update-entry, set-property, add-relation, remove-relation, add-source, remove-source, set-grounding, supersede-entry, move-entry or archive-entry." },
+                    "operation": { "type": "object", "description": "A single operation envelope (alternative to operations)." },
                     "sessionId": { "type": "string", "description": "Agent session id recorded in the audit log." }
                 }
             }),
         ),
         tool(
             "knobyte_wiki_apply_operation",
-            "Apply wiki operations planned by knobyte_wiki_plan_operation, by handle. The planned preconditions (entity revision and content hash) are re-checked: if an entity changed since planning, nothing is written (REVISION_CONFLICT / CONTENT_HASH_CONFLICT; plan again). Writes the Markdown, appends the audit log and refreshes the index. This edits the wiki only; it never decides team inbox items.",
+            "Apply a plan from knobyte_wiki_plan_operation by handle; nothing is written if an entity changed since planning (plan again). Edits the wiki only, never team inbox items.",
             json!({
                 "type": "object",
                 "required": ["handle"],
@@ -398,169 +401,137 @@ pub fn get_tools_list() -> Vec<Tool> {
         ),
         tool(
             "knobyte_relay_draft",
-            "Save a local DRAFT of a handoff relay (progress, blockers, next actions, evidence, recipients) through the team workflow, as the current actor. Recipients must be active members. Drafts are not published; a human reviews and publishes them.",
+            "Save a DRAFT handoff relay (progress, blockers, next actions, evidence) as the current actor. A human reviews and publishes it.",
             json!({
                 "type": "object",
                 "required": ["title", "summary"],
                 "properties": {
                     "title": { "type": "string" },
                     "summary": { "type": "string" },
-                    "sender": { "type": "string", "description": "Optional check: must equal the current member (the draft is always saved as the current actor)." },
-                    "namedRecipients": string_array_schema("Active member ids the relay is addressed to."),
-                    "openToTeam": { "type": "boolean", "description": "Whether any teammate may pick up the relay. Defaults to true when no named recipients are given, else false." },
+                    "sender": { "type": "string", "description": "Optional check: must equal the current member." },
+                    "namedRecipients": string_array_schema("Active member ids (see knobyte_members)."),
+                    "openToTeam": { "type": "boolean", "description": "Any teammate may pick it up (default: true without named recipients)." },
                     "progress": string_array_schema("Work completed."),
                     "blockers": string_array_schema("Open blockers."),
                     "nextActions": string_array_schema("Recommended next actions."),
-                    "evidence": string_array_schema("Evidence: file:<path>, commit:<sha>, entity:<id>, external:<uri>, or free text.")
+                    "evidence": string_array_schema(evidence)
                 }
             }),
         ),
         tool(
             "knobyte_inbox_draft",
-            "Save a local DRAFT inbox proposal through the team workflow, as the current actor: either a typed 'change' (knowledge.create, knowledge.update, spec.create, spec.update; see `knobyte inbox contract`) or a Markdown edit (title + target + content). Drafts are reviewed, published, approved, or rejected by a human.",
+            "Save a DRAFT inbox proposal as the current actor: a typed change, or a Markdown edit (title + target + content). A human reviews, publishes and decides it.",
             json!({
                 "type": "object",
                 "required": ["reason"],
                 "properties": {
                     "title": { "type": "string" },
-                    "target": { "type": "string", "description": "Markdown edit: scaffold file under .knobyte/ the proposal concerns (e.g. context/stack.md)." },
+                    "target": { "type": "string", "description": "Markdown edit: scaffold file under .knobyte/ (e.g. context/stack.md)." },
                     "content": { "type": "string", "description": "Markdown edit: proposed content." },
                     "mode": { "type": "string", "enum": ["replace", "append"], "description": "Markdown edit mode." },
                     "change": {
                         "type": "object",
-                        "description": "Typed change. knowledge.create / spec.create: {kind, entityKind, title, body, summary?, status?, topics?, relation? (spec only: {type, target: {id}})}. knowledge.update / spec.update: {kind, target: {id}, patch: {title?, summary?, body?}}.",
+                        "description": "Typed change (see `knobyte inbox contract`). *.create: {kind, entityKind, title, body, summary?, status?, topics?, relation? (spec only: {type, target: {id}})}. *.update: {kind, target: {id}, patch: {title?, summary?, body?}}.",
                         "required": ["kind"],
                         "properties": { "kind": { "type": "string", "enum": ["knowledge.create", "knowledge.update", "spec.create", "spec.update"] } }
                     },
                     "reason": { "type": "string", "description": "Why the change is proposed." },
-                    "evidence": string_array_schema("Evidence: file:<path>, commit:<sha>, entity:<id>, external:<uri>, or free text."),
-                    "author": { "type": "string", "description": "Optional check: must equal the current member (the draft is always saved as the current actor)." }
+                    "evidence": string_array_schema(evidence),
+                    "author": { "type": "string", "description": "Optional check: must equal the current member." }
                 }
             }),
         ),
         tool(
-            "knobyte_member_list",
-            "List registered team members for attribution.",
+            "knobyte_members",
+            "The effective local team member (current, null if none) and the registered team members.",
             json!({ "type": "object", "properties": {} }),
-        ),
-        tool(
-            "knobyte_member_current",
-            "Show the effective local team member identity, or null if none is selected.",
-            json!({ "type": "object", "properties": {} }),
-        ),
-        tool(
-            "knobyte_sync_groundings",
-            "Relocate and heal drifted grounding anchors in scaffold files after code symbols move between files. Writes scaffold files unless dryRun is true.",
-            json!({
-                "type": "object",
-                "properties": {
-                    "dryRun": { "type": "boolean", "default": false, "description": "Preview relocations without modifying files." }
-                }
-            }),
         ),
         tool(
             "knobyte_session_start",
-            "Entry point for new or resuming agents. Returns project info, current member, workstreams and the in-progress step, git HEAD and dirty files, the latest relay, recent decisions/risks, and scaffold heartbeat.",
+            "Entry point for new or resuming agents: project, current member, workstreams and in-progress step, git HEAD and dirty files, latest relay, recent decisions/risks, and scaffold health.",
             json!({ "type": "object", "properties": {} }),
         ),
         tool(
             "knobyte_workstream_step_update",
-            "Set the status (and optional evidence and touched files) of a workstream step through the team workflow (recorded as activity of the current actor); the update is stamped with git HEAD and dirty files. Creates the step if it does not exist; never creates a workstream. Archived or done workstreams are refused.",
+            "Checkpoint a workstream step's status (with optional evidence and touched files) as the current actor, stamped with git state. Creates a missing step, never a workstream.",
             json!({
                 "type": "object",
                 "required": ["status"],
                 "properties": {
-                    "workstreamId": { "type": "string", "description": "Workstream ID. Defaults to the only active workstream (or the only active one with an in-progress step); otherwise required." },
-                    "stepId": { "type": "string", "description": "Step ID. Takes precedence over stepIndex." },
-                    "stepIndex": { "type": "integer", "minimum": 0, "description": "0-based index of an existing step in the workstream." },
-                    "status": { "type": "string", "enum": STEP_STATUSES, "description": "New step status." },
-                    "evidence": { "type": "string", "description": "Evidence of completion (e.g. test results, command output)." },
-                    "filesTouched": string_array_schema("Files modified as part of this step.")
+                    "workstreamId": { "type": "string", "description": "Defaults to the only active workstream (or the only one with an in-progress step)." },
+                    "stepId": { "type": "string", "description": "Step ID (takes precedence over stepIndex; default: the in-progress step)." },
+                    "stepIndex": { "type": "integer", "minimum": 0, "description": "0-based index of an existing step." },
+                    "status": { "type": "string", "enum": STEP_STATUSES },
+                    "evidence": { "type": "string", "description": "e.g. test results or command output." },
+                    "filesTouched": string_array_schema("Files modified in this step.")
                 }
             }),
         ),
         tool(
-            "knobyte_playbook_list",
-            "List team playbooks (reusable step-by-step procedures). Archived playbooks are hidden unless requested.",
+            "knobyte_playbooks",
+            "List team playbooks (reusable procedures), or get one playbook by id (steps, checks, expected evidence, recent runs) or one run by runId.",
             json!({
                 "type": "object",
                 "properties": {
-                    "state": { "type": "string", "enum": crate::team::playbooks::PLAYBOOK_STATES, "description": "Only playbooks in this state." },
-                    "topic": { "type": "string" },
-                    "includeArchived": { "type": "boolean", "default": false },
-                    "cursor": { "type": "string", "description": "nextCursor of a previous page." },
+                    "id": { "type": "string", "description": "Playbook id: return that playbook." },
+                    "runId": { "type": "string", "description": "Playbook run id: return that run's step states and evidence." },
+                    "state": { "type": "string", "enum": crate::team::playbooks::PLAYBOOK_STATES, "description": "List: only this state." },
+                    "topic": { "type": "string", "description": "List: only this topic." },
+                    "includeArchived": { "type": "boolean", "default": false, "description": "List: include archived playbooks." },
+                    "cursor": { "type": "string", "description": "List: nextCursor of the previous page." },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
-                }
-            }),
-        ),
-        tool(
-            "knobyte_playbook_get",
-            "Get one playbook (steps with instructions, required checks and expected evidence, plus recent runs) by 'id', or one playbook run (step states and recorded evidence) by 'runId'.",
-            json!({
-                "type": "object",
-                "properties": {
-                    "id": { "type": "string", "description": "Playbook id." },
-                    "runId": { "type": "string", "description": "Playbook run id." }
                 }
             }),
         ),
         tool(
             "knobyte_playbook_complete_step",
-            "Complete one pending step of an active playbook run through the team workflow, as the current actor, recording evidence (the run completes with its last step). Completed steps are immutable. Agents cannot create, publish or archive playbooks, nor start or abandon runs.",
+            "Complete one pending step of an active playbook run as the current actor, recording evidence. Agents cannot create, publish or archive playbooks, nor start or abandon runs.",
             json!({
                 "type": "object",
                 "required": ["runId", "stepId"],
                 "properties": {
                     "runId": { "type": "string" },
-                    "stepId": { "type": ["string", "integer"], "description": "Step id, or the step's 1-based number in the run." },
+                    "stepId": { "type": ["string", "integer"], "description": "Step id, or the step's 1-based number." },
                     "evidence": string_array_schema("Evidence: file:<path>, commit:<sha>, entity:<id>, code:<symbol>, a URL, or free text."),
-                    "note": { "type": "string", "description": "Short note on how the step was done." }
+                    "note": { "type": "string", "description": "How the step was done." }
                 }
             }),
         ),
         tool(
             "knobyte_catch_up",
-            "Catch-up digest for the current actor: what changed in shared memory since the actor's checkout-local cursor (or 'since'), grouped as handoffs addressed to me, proposals awaiting my review, decisions, knowledge changes, workstreams, playbooks and other activity.",
+            "What changed in shared memory since the current actor last caught up: handoffs to me, reviews, decisions, knowledge, workstreams, playbooks, activity. mark=true marks it read instead.",
             json!({
                 "type": "object",
                 "properties": {
-                    "since": { "type": "string", "description": "Override the baseline: RFC 3339, YYYY-MM-DD, or relative Nd/Nh." },
+                    "since": { "type": "string", "description": "Override the baseline: RFC 3339, YYYY-MM-DD, or Nd/Nh." },
                     "workstream": { "type": "string", "description": "Only items related to this workstream." },
                     "groups": string_array_schema("Only these groups: handoffs, reviews, decisions, knowledge, workstreams, playbooks, activity."),
                     "includeMine": { "type": "boolean", "default": false, "description": "Also list the actor's own changes." },
-                    "cursor": { "type": "string", "description": "nextCursor of a previous page." },
-                    "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
-                }
-            }),
-        ),
-        tool(
-            "knobyte_catch_up_mark",
-            "Mark the catch-up digest as read: moves only the current actor's checkout-local cursor (nothing shared is written). Pass the digest's 'observedAt' as 'at' so items that arrived while reading are not skipped.",
-            json!({
-                "type": "object",
-                "properties": {
-                    "at": { "type": "string", "description": "RFC 3339 instant to mark up to (default: now)." }
+                    "cursor": { "type": "string", "description": "nextCursor of the previous page." },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 100 },
+                    "mark": { "type": "boolean", "default": false, "description": "Mark the digest read: moves only this checkout's cursor (nothing shared is written)." },
+                    "at": { "type": "string", "description": "With mark: RFC 3339 instant to mark up to; pass the digest's observedAt (default: now)." }
                 }
             }),
         ),
         tool(
             "knobyte_file_context",
-            "Get contextual memory for a file: recorded events (decisions, risks, discoveries) referencing it and the code graph symbols defined in it.",
+            "Context for one file: recorded events (decisions, risks, discoveries) that reference it and the code symbols defined in it.",
             json!({
                 "type": "object",
                 "required": ["filePath"],
                 "properties": {
-                    "filePath": { "type": "string", "description": "Repository-relative path (or suffix) of the file." }
+                    "filePath": { "type": "string", "description": "Repository-relative path (or suffix)." }
                 }
             }),
         ),
         tool(
             "knobyte_harvest",
-            "Harvest decisions from git commit history, ADRs, and changelogs and append new ones to the project event log (deduplicated). Returns counts per source.",
+            "Harvest decisions from git history, ADRs and changelogs into the project event log (deduplicated); returns counts per source.",
             json!({
                 "type": "object",
                 "properties": {
-                    "limit": { "type": "integer", "minimum": 1, "default": 20, "description": "Max number of git commits to scan." }
+                    "limit": { "type": "integer", "minimum": 1, "default": 20, "description": "Git commits to scan." }
                 }
             }),
         ),
@@ -599,9 +570,10 @@ pub fn execute_tool_with_config(name: &str, args: &Value, config: &KnobyteConfig
 
     match name {
         "knobyte_check" => {
-            let fix = args.get("fix").and_then(|v| v.as_bool()).unwrap_or(false);
+            let dry_run = args.get("dryRun").and_then(|v| v.as_bool()).unwrap_or(false);
+            let fix = dry_run || args.get("fix").and_then(|v| v.as_bool()).unwrap_or(false);
             let sync = if fix {
-                match crate::drift::sync_groundings(config, false) {
+                match crate::drift::sync_groundings(config, dry_run) {
                     Ok(res) => Some(res),
                     Err(e) => return CallToolResult::error(&format!("Failed to fix groundings: {}", e)),
                 }
@@ -614,6 +586,7 @@ pub fn execute_tool_with_config(name: &str, args: &Value, config: &KnobyteConfig
                 None => pretty(&report),
             }
         }
+        // Alias of knobyte_check {fix: true}: only the relocation result.
         "knobyte_sync_groundings" => {
             let dry_run = args.get("dryRun").and_then(|v| v.as_bool()).unwrap_or(false);
             match crate::drift::sync_groundings(config, dry_run) {
@@ -831,6 +804,7 @@ pub fn execute_tool_with_config(name: &str, args: &Value, config: &KnobyteConfig
                 Err(e) => CallToolResult::error(&format!("Status failed: {}", e)),
             }
         }
+        // Legacy aliases of knobyte_wiki_search / knobyte_wiki_get (offset paging, raw shapes).
         "knobyte_wiki_query" => {
             let text = match args.get("text").or_else(|| args.get("query")).and_then(|v| v.as_str()) {
                 Some(t) => t.to_string(),
@@ -907,6 +881,8 @@ pub fn execute_tool_with_config(name: &str, args: &Value, config: &KnobyteConfig
         "knobyte_relay_list" => pretty(&list_relays(config)),
         "knobyte_relay_draft" => relay_draft_tool(args, config),
         "knobyte_inbox_draft" => inbox_draft_tool(args, config),
+        "knobyte_members" => pretty(&json!({ "current": get_current_member(config), "members": list_members(config) })),
+        // Aliases of knobyte_members: one field each.
         "knobyte_member_list" => pretty(&list_members(config)),
         "knobyte_member_current" => match get_current_member(config) {
             Some(m) => pretty(&m),
@@ -1053,17 +1029,21 @@ pub fn execute_tool_with_config(name: &str, args: &Value, config: &KnobyteConfig
             }))
         }
         "knobyte_workstream_step_update" => workstream_step_update(args, config),
+        "knobyte_playbooks" => {
+            if args.get("id").is_some_and(|v| !v.is_null()) || args.get("runId").is_some_and(|v| !v.is_null()) {
+                playbook_get_tool(args, config)
+            } else {
+                playbook_list_tool(args, config)
+            }
+        }
+        // Aliases of knobyte_playbooks.
         "knobyte_playbook_list" => playbook_list_tool(args, config),
         "knobyte_playbook_get" => playbook_get_tool(args, config),
         "knobyte_playbook_complete_step" => playbook_complete_step_tool(args, config),
+        "knobyte_catch_up" if args.get("mark").and_then(|v| v.as_bool()).unwrap_or(false) => catch_up_mark(args, config),
         "knobyte_catch_up" => catch_up_tool(args, config),
-        "knobyte_catch_up_mark" => {
-            let mut action = json!({ "kind": "catchup.mark" });
-            if let Some(at) = str_arg(args, "at").filter(|a| !a.trim().is_empty()) {
-                action["at"] = json!(at);
-            }
-            run_team_action(config, action, &ActorChoice::resolved())
-        }
+        // Alias of knobyte_catch_up {mark: true}.
+        "knobyte_catch_up_mark" => catch_up_mark(args, config),
         "knobyte_file_context" => {
             let file_path = match args.get("filePath").or_else(|| args.get("file")).and_then(|v| v.as_str()) {
                 Some(f) if !f.trim().is_empty() => f,
@@ -1156,7 +1136,7 @@ fn require_active_members(config: &KnobyteConfig, label: &str, ids: &[String]) -
         Ok(())
     } else {
         Err(team_error(&TeamError::validation(format!(
-            "Unknown or inactive {}: {} (see knobyte_member_list)",
+            "Unknown or inactive {}: {} (see knobyte_members)",
             label,
             unknown.join(", ")
         ))))
@@ -1366,6 +1346,14 @@ fn playbook_complete_step_tool(args: &Value, config: &KnobyteConfig) -> CallTool
     run_team_action(config, action, &ActorChoice::resolved())
 }
 
+fn catch_up_mark(args: &Value, config: &KnobyteConfig) -> CallToolResult {
+    let mut action = json!({ "kind": "catchup.mark" });
+    if let Some(at) = str_arg(args, "at").filter(|a| !a.trim().is_empty()) {
+        action["at"] = json!(at);
+    }
+    run_team_action(config, action, &ActorChoice::resolved())
+}
+
 fn catch_up_tool(args: &Value, config: &KnobyteConfig) -> CallToolResult {
     let req = crate::team::catchup::CatchUpRequest {
         since: str_arg(args, "since").map(str::to_string),
@@ -1550,9 +1538,20 @@ fn wiki_search_tool(args: &Value, config: &KnobyteConfig) -> CallToolResult {
         Ok(s) => s,
         Err(e) => return e,
     };
+    let include_body = args.get("includeBody").and_then(|v| v.as_bool()).unwrap_or(false);
     match session.search(&req) {
         Ok(page) => {
             let mut data = json!(page);
+            if include_body {
+                if let Some(items) = data["items"].as_array_mut() {
+                    for item in items {
+                        let id = item["entity"]["id"].as_str().map(str::to_string);
+                        if let Some(Ok(Some(e))) = id.map(|id| session.index().show(&id)) {
+                            item["entity"]["body"] = json!(e.body);
+                        }
+                    }
+                }
+            }
             data["index"] = wiki_index_state(&session);
             wiki_envelope_result(crate::wiki::envelope::envelope_for(&data, &session.status().diagnostics))
         }

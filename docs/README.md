@@ -14,7 +14,7 @@ engineers and their coding agents. It is written in Rust and ships as a single b
 | **[Code graph and vectors](code-graph-and-vector.md)** | Tree-sitter extraction, TypeScript compiler mode, graph maintenance, queries and protocol v3, CozoDB, embeddings, PageRank, shortest path, Datalog |
 | **[Team workflows](team-memory-workflows.md)** | Actors, preview/apply envelopes, exit codes, Members, Inbox, Relays, Workstreams, Specs, Activity, contracts |
 | **[Project Hub](hub.md)** | Sign-in, security, every page, jobs, setup wizard, Fleet |
-| **[MCP server](mcp-setup.md)** | Transports, security, client configuration, all 38 tools |
+| **[MCP server](mcp-setup.md)** | Transports, security, client configuration, tool profiles, all 30 tools |
 | **[CLI reference](cli-reference.md)** | Every command and flag, generated from `--help`; exit codes; environment variables |
 
 ## Layout of a Knobyte project

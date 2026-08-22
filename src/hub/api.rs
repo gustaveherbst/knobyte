@@ -237,10 +237,29 @@ pub async fn overview(State(state): State<HubState>) -> Response {
             .iter()
             .filter(|p| p.status == PROPOSAL_STATUS_PENDING)
             .count();
+        // The Hub is not the MCP server: it reports the profile a server started here without
+        // --profile would use (KNOBYTE_MCP_PROFILE, then mcp.profile, else core).
+        let profile = crate::mcp::resolve_profile_for(None, &config.scaffold_root);
+        let active = profile.as_ref().map(|r| r.profile).unwrap_or_default();
         let tools: Vec<Value> = crate::mcp::get_tools_list()
             .into_iter()
-            .map(|t| json!({ "name": t.name, "description": t.description }))
+            .map(|t| {
+                let profiles: Vec<&str> =
+                    crate::mcp::profiles::profiles_including(&t.name).into_iter().map(|p| p.name()).collect();
+                json!({ "name": t.name, "description": t.description, "profiles": profiles, "active": active.includes(&t.name) })
+            })
             .collect();
+        let profiles: Vec<Value> = crate::mcp::McpProfile::ALL
+            .iter()
+            .map(|p| json!({ "name": p.name(), "summary": p.summary(), "tools": p.tool_names() }))
+            .collect();
+        let mcp_profile = json!({
+            "name": active.name(),
+            "source": profile.as_ref().map(|r| r.source.to_string()).unwrap_or_else(|_| "default".into()),
+            "error": profile.as_ref().err(),
+            "toolCount": active.tool_names().len(),
+            "profiles": profiles,
+        });
         let heartbeat = check_heartbeat(config, 14);
         json_ok(json!({
             "product": "knobyte",
@@ -266,6 +285,7 @@ pub async fn overview(State(state): State<HubState>) -> Response {
             "relays": { "total": relays.len(), "open": open_relays },
             "inbox": { "pending": pending },
             "mcpTools": tools,
+            "mcpProfile": mcp_profile,
         }))
     })
     .await

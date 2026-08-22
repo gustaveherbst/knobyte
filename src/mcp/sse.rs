@@ -38,6 +38,7 @@ use crate::config::KnobyteConfig;
 use crate::mcp::handler::{
     handle_value, is_request_free, server_config, PARSE_ERROR, SUPPORTED_PROTOCOL_VERSIONS,
 };
+use crate::mcp::profiles::McpProfile;
 use crate::mcp::protocol::JsonRpcResponse;
 use crate::mcp::security::{
     bearer_from_header, constant_time_eq, generate_token, host_allowed, is_loopback_host, origin_allowed,
@@ -114,6 +115,8 @@ pub struct SseServerOptions {
     pub token: Option<String>,
     /// HTTP transports to serve (both by default).
     pub transport: HttpTransport,
+    /// Tool profile; `None` uses the project's configured profile (env, then config.json).
+    pub profile: Option<McpProfile>,
 }
 
 #[derive(Clone)]
@@ -123,6 +126,7 @@ pub struct AppState {
     pub config: Arc<KnobyteConfig>,
     pub security: Arc<ServerSecurity>,
     pub transport: HttpTransport,
+    pub profile: McpProfile,
 }
 
 #[derive(Debug, Deserialize)]
@@ -156,12 +160,24 @@ pub fn build_router(config: KnobyteConfig, security: ServerSecurity) -> Router {
 /// Build the axum router serving only the selected HTTP transport(s). The endpoints of a
 /// disabled transport answer `404` with a message naming the flag that disabled them.
 pub fn build_router_with(config: KnobyteConfig, security: ServerSecurity, transport: HttpTransport) -> Router {
+    let profile = McpProfile::configured(&config.scaffold_root);
+    build_router_with_profile(config, security, transport, profile)
+}
+
+/// Build the axum router serving `transport` and the tools of `profile`.
+pub fn build_router_with_profile(
+    config: KnobyteConfig,
+    security: ServerSecurity,
+    transport: HttpTransport,
+    profile: McpProfile,
+) -> Router {
     let state = AppState {
         sessions: Arc::new(Mutex::new(HashMap::new())),
         http_sessions: Arc::new(Mutex::new(HashMap::new())),
         config: Arc::new(config),
         security: Arc::new(security),
         transport,
+        profile,
     };
 
     let mut router = Router::new();
@@ -204,7 +220,7 @@ pub async fn start_http_server(
     transport: HttpTransport,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let token = std::env::var(TOKEN_ENV_VAR).ok();
-    start_sse_server_with_options(host, port, SseServerOptions { token, transport }).await
+    start_sse_server_with_options(host, port, SseServerOptions { token, transport, profile: None }).await
 }
 
 /// Start the HTTP MCP server with explicit options.
@@ -218,7 +234,8 @@ pub async fn start_sse_server_with_options(
     let (token, generated) = resolve_auth_token(host, options.token);
 
     let transport = options.transport;
-    let app = build_router_with(config, ServerSecurity { token: token.clone(), loopback_bind }, transport);
+    let profile = options.profile.unwrap_or_else(|| McpProfile::configured(&config.scaffold_root));
+    let app = build_router_with_profile(config, ServerSecurity { token: token.clone(), loopback_bind }, transport, profile);
 
     let addr = if host.contains(':') && !host.starts_with('[') {
         format!("[{}]:{}", host, port)
@@ -375,7 +392,8 @@ async fn root_handler(State(state): State<AppState>, headers: HeaderMap) -> Resp
         "protocol": "model-context-protocol",
         "protocolVersions": SUPPORTED_PROTOCOL_VERSIONS,
         "transports": state.transport.names(),
-        "tools": crate::mcp::tools::get_tools_list().len(),
+        "profile": state.profile.name(),
+        "tools": state.profile.tool_names().len(),
         "auth": if state.security.token.is_some() { "bearer" } else { "none" },
         "endpoints": endpoints(state.transport),
     }))
@@ -410,13 +428,15 @@ async fn streamable_disabled_handler() -> Response {
     )
 }
 
-async fn health_handler() -> impl IntoResponse {
+async fn health_handler(State(state): State<AppState>) -> impl IntoResponse {
     (
         StatusCode::OK,
         Json(json!({
             "status": "ok",
             "service": format!("{}-mcp", crate::version::APP_NAME),
-            "version": crate::version::VERSION
+            "version": crate::version::VERSION,
+            "profile": state.profile.name(),
+            "tools": state.profile.tool_names(),
         })),
     )
 }
@@ -502,8 +522,9 @@ async fn messages_handler(
     };
 
     let config = state.config.clone();
+    let profile = state.profile;
     tokio::spawn(async move {
-        let result = tokio::task::spawn_blocking(move || handle_value(value, &config)).await;
+        let result = tokio::task::spawn_blocking(move || handle_value(value, &config, profile)).await;
         if let Ok(Some(resp)) = result {
             let _ = tx.send(Event::default().event("message").data(resp.to_string())).await;
         }
@@ -569,7 +590,8 @@ async fn mcp_post_handler(State(state): State<AppState>, headers: HeaderMap, bod
 
     let only_notifications = is_request_free(&value);
     let config = state.config.clone();
-    let result = tokio::task::spawn_blocking(move || handle_value(value, &config)).await;
+    let profile = state.profile;
+    let result = tokio::task::spawn_blocking(move || handle_value(value, &config, profile)).await;
     let response = match result {
         Ok(r) => r,
         Err(_) => return plain_error(StatusCode::INTERNAL_SERVER_ERROR, "Request processing failed"),

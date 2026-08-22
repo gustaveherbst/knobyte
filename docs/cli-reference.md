@@ -72,6 +72,7 @@ Without `--preview` or `--apply` a mutation previews and applies in one step.
 | `KNOBYTE_NO_AGENT_LAUNCH` | Set to `1` to make `setup` and `sync` never launch an agent CLI |
 | `KNOBYTE_HUB_TOKEN` | Access token required by the Hub (same as `hub --token`) |
 | `KNOBYTE_MCP_TOKEN` | Bearer token required by the MCP HTTP server (same as `mcp --token`) |
+| `KNOBYTE_MCP_PROFILE` | MCP tool profile: `core`, `team`, `wiki`, `graph` or `full` (overridden by `mcp --profile`; overrides `mcp.profile` in `.knobyte/config.json`) |
 
 ---
 
@@ -2737,13 +2738,14 @@ Start the Model Context Protocol (MCP) server (HTTP: streamable /mcp and legacy 
 Usage: knobyte mcp [OPTIONS]
 
 Options:
-      --port <PORT>    HTTP port (1-65535) [default: 3005]
-      --host <HOST>    HTTP bind address (non-loopback requires a bearer token) [default: 127.0.0.1]
-      --sse            Serve only the legacy HTTP+SSE transport (GET /sse + POST /messages)
-      --http           Serve only the streamable HTTP transport (POST /mcp)
-      --stdio          Speak MCP over stdin/stdout instead of HTTP (for clients that spawn the server)
-      --token <TOKEN>  Bearer token required by the MCP server (exported as KNOBYTE_MCP_TOKEN)
-  -h, --help           Print help
+      --port <PORT>        HTTP port (1-65535) [default: 3005]
+      --host <HOST>        HTTP bind address (non-loopback requires a bearer token) [default: 127.0.0.1]
+      --sse                Serve only the legacy HTTP+SSE transport (GET /sse + POST /messages)
+      --http               Serve only the streamable HTTP transport (POST /mcp)
+      --stdio              Speak MCP over stdin/stdout instead of HTTP (for clients that spawn the server)
+      --token <TOKEN>      Bearer token required by the MCP server (exported as KNOBYTE_MCP_TOKEN)
+      --profile <PROFILE>  Tool profile to list (default core; overrides KNOBYTE_MCP_PROFILE and mcp.profile in .knobyte/config.json) [possible values: core, team, wiki, graph, full]
+  -h, --help               Print help
 ```
 
 ## `knobyte pattern`

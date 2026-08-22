@@ -79,7 +79,7 @@ answers `401` without one.
 | | **Setup** | The setup wizard (below). |
 | | **Settings** | Agent logging cadence, onboarding tour and Sign out. |
 | | **Fleet** | Every Knobyte repository registered on this machine, with health status. |
-| | **MCP** | The MCP tools the server exposes and how to start it. |
+| | **MCP** | The MCP tool profiles (the project default and how it was chosen), the tools in each profile, and how to start the server. |
 
 Team mutations in the Hub use the same preview → apply envelopes as the CLI, so you always
 review the exact file changes first. See [Team workflows](team-memory-workflows.md#preview-and-apply).

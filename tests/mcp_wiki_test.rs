@@ -91,14 +91,19 @@ fn contract_tools_are_listed() {
         "knobyte_wiki_search",
         "knobyte_wiki_neighborhood",
         "knobyte_wiki_validate",
-        "knobyte_wiki_grounding_status",
         "knobyte_wiki_plan_operation",
         "knobyte_wiki_apply_operation",
+    ] {
+        assert!(tools.iter().any(|t| t.name == name), "missing {}", name);
+    }
+    // Merged tools: the retired names are callable aliases but never listed.
+    for name in [
+        "knobyte_wiki_grounding_status",
         "knobyte_wiki_query",
         "knobyte_wiki_show",
         "knobyte_wiki_list",
     ] {
-        assert!(tools.iter().any(|t| t.name == name), "missing {}", name);
+        assert!(!tools.iter().any(|t| t.name == name), "{} must not be listed", name);
     }
     let apply = tools
         .iter()
@@ -315,4 +320,71 @@ fn contract_tools_report_an_unusable_index() {
         !config.wiki_db_path().exists(),
         "reads never create the index"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Retired wiki tool names: hidden aliases of knobyte_wiki_get / knobyte_wiki_search
+// ---------------------------------------------------------------------------
+
+fn raw(f: &Fixture, name: &str, args: Value) -> Value {
+    let r = execute_tool_with_config(name, &args, &f.config);
+    assert!(r.is_error != Some(true), "{}: {}", name, r.content[0].text);
+    serde_json::from_str(&r.content[0].text).unwrap()
+}
+
+#[test]
+fn alias_wiki_show_matches_wiki_get_with_body() {
+    let f = Fixture::new();
+    let legacy = raw(&f, "knobyte_wiki_show", json!({ "id": "kb_a" }));
+    assert_eq!(legacy["id"], "kb_a");
+    assert!(legacy["body"].as_str().unwrap().contains("Alpha body."));
+    assert!(legacy["relationsPage"].is_object());
+    let merged = f.ok("knobyte_wiki_get", json!({ "id": "kb_a", "includeBody": true }));
+    assert_eq!(merged["data"]["body"], legacy["body"]);
+    assert_eq!(merged["data"]["title"], legacy["title"]);
+}
+
+#[test]
+fn alias_wiki_grounding_status_matches_wiki_get_groundings() {
+    let f = Fixture::new();
+    let legacy = f.ok("knobyte_wiki_grounding_status", json!({ "id": "kb_a" }));
+    assert_eq!(legacy["data"]["id"], "kb_a");
+    let merged = f.ok("knobyte_wiki_get", json!({ "id": "kb_a" }));
+    assert_eq!(merged["data"]["groundings"], legacy["data"]["groundings"]);
+    assert_eq!(merged["data"]["groundings"][0]["origin"], "frontmatter");
+}
+
+#[test]
+fn alias_wiki_list_matches_wiki_search_without_query() {
+    let f = Fixture::new();
+    let legacy = raw(&f, "knobyte_wiki_list", json!({ "limit": 50 }));
+    let mut legacy_ids: Vec<String> =
+        legacy["items"].as_array().unwrap().iter().map(|i| i["id"].as_str().unwrap().to_string()).collect();
+    let merged = f.ok("knobyte_wiki_search", json!({ "limit": 50 }));
+    let mut merged_ids: Vec<String> = merged["data"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["entity"]["id"].as_str().unwrap().to_string())
+        .collect();
+    legacy_ids.sort();
+    merged_ids.sort();
+    assert_eq!(legacy_ids.len(), 8);
+    assert_eq!(legacy_ids, merged_ids);
+}
+
+#[test]
+fn alias_wiki_query_matches_wiki_search_with_query() {
+    let f = Fixture::new();
+    let legacy = raw(&f, "knobyte_wiki_query", json!({ "text": "Gamma" }));
+    assert_eq!(legacy["items"][0]["id"], "kb_c");
+    let merged = f.ok("knobyte_wiki_search", json!({ "query": "Gamma" }));
+    assert_eq!(merged["data"]["items"][0]["entity"]["id"], "kb_c");
+    // includeBody (formerly only on list/query) is available on the merged tool.
+    let legacy = raw(&f, "knobyte_wiki_query", json!({ "text": "Gamma", "includeBody": true }));
+    let merged = f.ok("knobyte_wiki_search", json!({ "query": "Gamma", "includeBody": true }));
+    assert!(merged["data"]["items"][0]["entity"]["body"].as_str().unwrap().contains("Gamma body."));
+    assert_eq!(merged["data"]["items"][0]["entity"]["body"], legacy["items"][0]["body"]);
+    let plain = f.ok("knobyte_wiki_search", json!({ "query": "Gamma" }));
+    assert!(plain["data"]["items"][0]["entity"].get("body").is_none());
 }

@@ -328,6 +328,11 @@ async fn understand_endpoints_respond() {
     }
     let v = c.get_json("/api/overview").await;
     assert_eq!(v["mcpTools"].as_array().unwrap().len(), knobyte::mcp::get_tools_list().len());
+    assert_eq!(v["mcpProfile"]["name"], "core");
+    assert_eq!(v["mcpProfile"]["toolCount"], knobyte::mcp::tools_for_profile(knobyte::mcp::McpProfile::Core).len());
+    assert_eq!(v["mcpProfile"]["profiles"].as_array().unwrap().len(), 5);
+    let active = v["mcpTools"].as_array().unwrap().iter().filter(|t| t["active"] == true).count();
+    assert_eq!(active, knobyte::mcp::tools_for_profile(knobyte::mcp::McpProfile::Core).len());
     assert_eq!(v["bind"], HOST);
     let (status, body) = c.get("/api/wiki/entity?id=does-not-exist").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
