@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 320" width="100%" height="100%">
+  <defs>
+    <linearGradient id="setupBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0f19" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <filter id="setupShadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1000" height="320" rx="12" fill="url(#setupBg)" stroke="#1e293b" stroke-width="1.5" />
+
+  <!-- Header -->
+  <text x="500" y="36" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="700" fill="#38bdf8" text-anchor="middle">THREE STEPS TO PERSISTENT PROJECT MEMORY</text>
+
+  <!-- Step 1 -->
+  <g transform="translate(50, 65)" filter="url(#setupShadow)">
+    <rect width="260" height="220" rx="8" fill="#111827" stroke="#0284c7" stroke-width="1.5" />
+    <rect x="0" y="0" width="260" height="36" rx="8" fill="#0369a1" />
+    <text x="16" y="23" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#f0f9ff">Step 1: Run Setup</text>
+
+    <rect x="14" y="50" width="232" height="32" rx="4" fill="#0f172a" stroke="#1e293b" stroke-width="1" />
+    <text x="24" y="70" font-family="monospace" font-size="11" font-weight="600" fill="#38bdf8">knobyte setup</text>
+
+    <text x="16" y="105" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#f8fafc">Generates Scaffold Directory:</text>
+    <text x="16" y="128" font-family="monospace" font-size="10" fill="#93c5fd">• .knobyte/config.json</text>
+    <text x="16" y="146" font-family="monospace" font-size="10" fill="#93c5fd">• .knobyte/AGENTS.md</text>
+    <text x="16" y="164" font-family="monospace" font-size="10" fill="#93c5fd">• .knobyte/ROUTER.md</text>
+    <text x="16" y="182" font-family="monospace" font-size="10" fill="#93c5fd">• .knobyte/context/*.md</text>
+    <text x="16" y="200" font-family="monospace" font-size="10" fill="#64748b">• .knobyte/.gitignore</text>
+  </g>
+
+  <!-- Arrow 1 -> 2 -->
+  <path d="M 325 175 L 355 175" fill="none" stroke="#38bdf8" stroke-width="2.5" />
+  <polygon points="355,170 365,175 355,180" fill="#38bdf8" />
+
+  <!-- Step 2 -->
+  <g transform="translate(370, 65)" filter="url(#setupShadow)">
+    <rect width="260" height="220" rx="8" fill="#111827" stroke="#4f46e5" stroke-width="1.5" />
+    <rect x="0" y="0" width="260" height="36" rx="8" fill="#312e81" />
+    <text x="16" y="23" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#e0e7ff">Step 2: Build Indexes</text>
+
+    <rect x="14" y="50" width="232" height="48" rx="4" fill="#0f172a" stroke="#1e293b" stroke-width="1" />
+    <text x="24" y="68" font-family="monospace" font-size="10" font-weight="600" fill="#818cf8">knobyte graph rebuild</text>
+    <text x="24" y="86" font-family="monospace" font-size="10" font-weight="600" fill="#818cf8">knobyte wiki rebuild-index</text>
+
+    <text x="16" y="118" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#f8fafc">Multi-Engine Compilation:</text>
+    <text x="16" y="140" font-family="system-ui, sans-serif" font-size="10" fill="#c7d2fe">• Tree-sitter AST Graph (Rust/TS/JS/Py)</text>
+    <text x="16" y="158" font-family="system-ui, sans-serif" font-size="10" fill="#c7d2fe">• SQLite FTS5 Full-Text Wiki</text>
+    <text x="16" y="176" font-family="system-ui, sans-serif" font-size="10" fill="#c7d2fe">• CozoDB 128-dim HNSW Vectors</text>
+    <text x="16" y="196" font-family="system-ui, sans-serif" font-size="10" fill="#10b981">• Sub-second execution (&lt;300ms)</text>
+  </g>
+
+  <!-- Arrow 2 -> 3 -->
+  <path d="M 645 175 L 675 175" fill="none" stroke="#10b981" stroke-width="2.5" />
+  <polygon points="675,170 685,175 675,180" fill="#10b981" />
+
+  <!-- Step 3 -->
+  <g transform="translate(690, 65)" filter="url(#setupShadow)">
+    <rect width="260" height="220" rx="8" fill="#111827" stroke="#059669" stroke-width="1.5" />
+    <rect x="0" y="0" width="260" height="36" rx="8" fill="#065f46" />
+    <text x="16" y="23" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#ecfdf5">Step 3: Open Hub</text>
+
+    <rect x="14" y="50" width="232" height="32" rx="4" fill="#0f172a" stroke="#1e293b" stroke-width="1" />
+    <text x="24" y="70" font-family="monospace" font-size="11" font-weight="600" fill="#34d399">knobyte hub --port 4000</text>
+
+    <text x="16" y="105" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#f8fafc">Explore &amp; Collaborate:</text>
+    <text x="16" y="128" font-family="system-ui, sans-serif" font-size="10" fill="#a7f3d0">• Interactive Workstation Dashboard</text>
+    <text x="16" y="146" font-family="system-ui, sans-serif" font-size="10" fill="#a7f3d0">• Multi-Project Fleet Manager</text>
+    <text x="16" y="164" font-family="system-ui, sans-serif" font-size="10" fill="#a7f3d0">• Clickable Contributor Drawer</text>
+    <text x="16" y="182" font-family="system-ui, sans-serif" font-size="10" fill="#a7f3d0">• Live Audit &amp; Event Stream</text>
+    <text x="16" y="200" font-family="system-ui, sans-serif" font-size="10" fill="#38bdf8">• Ready for Remote SSE/Stdio MCP</text>
+  </g>
+</svg>

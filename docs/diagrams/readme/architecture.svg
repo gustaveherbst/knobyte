@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 480" width="100%" height="100%">
+  <defs>
+    <linearGradient id="archBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0f19" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <filter id="archShadow" x="-3%" y="-3%" width="106%" height="106%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.4" />
+    </filter>
+  </defs>
+
+  <rect width="1000" height="480" rx="12" fill="url(#archBg)" stroke="#1e293b" stroke-width="1.5" />
+
+  <!-- Title -->
+  <text x="500" y="36" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="700" fill="#38bdf8" text-anchor="middle">KNOBYTE ENGINE ARCHITECTURE — 100% PURE RUST</text>
+
+  <!-- Layer 1: Inputs (Top) -->
+  <g transform="translate(60, 60)" filter="url(#archShadow)">
+    <rect width="880" height="70" rx="8" fill="#111827" stroke="#334155" stroke-width="1.5" />
+    <text x="20" y="26" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#94a3b8">INPUT SOURCES (CANONICAL REPOSITORY FILES)</text>
+
+    <!-- Source blocks -->
+    <rect x="20" y="35" width="260" height="24" rx="4" fill="#1e293b" />
+    <text x="30" y="51" font-family="monospace" font-size="11" fill="#cbd5e1">Source Code (Rust, TS/JS, Python)</text>
+
+    <rect x="300" y="35" width="270" height="24" rx="4" fill="#1e293b" />
+    <text x="310" y="51" font-family="monospace" font-size="11" fill="#cbd5e1">.knobyte/context/*.md, specs/*.md</text>
+
+    <rect x="590" y="35" width="270" height="24" rx="4" fill="#1e293b" />
+    <text x="600" y="51" font-family="monospace" font-size="11" fill="#cbd5e1">.knobyte/team/, inbox/, relays/</text>
+  </g>
+
+  <!-- Down arrows -->
+  <path d="M 500 135 L 500 160" fill="none" stroke="#38bdf8" stroke-width="2.5" />
+  <polygon points="495,160 500,168 505,160" fill="#38bdf8" />
+
+  <!-- Layer 2: Core Engine (Middle) -->
+  <g transform="translate(60, 175)" filter="url(#archShadow)">
+    <rect width="880" height="150" rx="10" fill="#0f172a" stroke="#0284c7" stroke-width="1.5" />
+    <rect x="0" y="0" width="880" height="32" rx="10" fill="#0369a1" />
+    <text x="20" y="21" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#f0f9ff">KNOBYTE EMBEDDED ENGINE RUNTIME</text>
+
+    <!-- 3 Engines -->
+    <!-- Tree-sitter -->
+    <g transform="translate(20, 45)">
+      <rect width="265" height="90" rx="6" fill="#111827" stroke="#1e293b" stroke-width="1" />
+      <text x="14" y="24" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#38bdf8">Tree-sitter Code Graph</text>
+      <text x="14" y="44" font-family="system-ui, sans-serif" font-size="10" fill="#94a3b8">• Multi-language AST parsing</text>
+      <text x="14" y="60" font-family="system-ui, sans-serif" font-size="10" fill="#94a3b8">• Symbols, calls, imports, signatures</text>
+      <text x="14" y="76" font-family="monospace" font-size="9" fill="#64748b">.knobyte/graph.db (SQLite WAL)</text>
+    </g>
+
+    <!-- CozoDB -->
+    <g transform="translate(305, 45)">
+      <rect width="270" height="90" rx="6" fill="#111827" stroke="#1e293b" stroke-width="1" />
+      <text x="14" y="24" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#818cf8">CozoDB Neuro-Symbolic</text>
+      <text x="14" y="44" font-family="system-ui, sans-serif" font-size="10" fill="#94a3b8">• 128-dim dense HNSW vectors</text>
+      <text x="14" y="60" font-family="system-ui, sans-serif" font-size="10" fill="#94a3b8">• Datalog relational &amp; PageRank graph</text>
+      <text x="14" y="76" font-family="monospace" font-size="9" fill="#64748b">.knobyte/cozo.db (Pure Sled)</text>
+    </g>
+
+    <!-- SQLite FTS5 -->
+    <g transform="translate(595, 45)">
+      <rect width="265" height="90" rx="6" fill="#111827" stroke="#1e293b" stroke-width="1" />
+      <text x="14" y="24" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#10b981">SQLite FTS5 &amp; Grounding</text>
+      <text x="14" y="44" font-family="system-ui, sans-serif" font-size="10" fill="#94a3b8">• Full-text BM25 wiki search</text>
+      <text x="14" y="60" font-family="system-ui, sans-serif" font-size="10" fill="#94a3b8">• AST hash baseline &amp; sync engine</text>
+      <text x="14" y="76" font-family="monospace" font-size="9" fill="#64748b">.knobyte/wiki.db (FTS5)</text>
+    </g>
+  </g>
+
+  <!-- Down arrows -->
+  <path d="M 500 330 L 500 355" fill="none" stroke="#10b981" stroke-width="2.5" />
+  <polygon points="495,355 500,363 505,355" fill="#10b981" />
+
+  <!-- Layer 3: Interfaces (Bottom) -->
+  <g transform="translate(60, 370)" filter="url(#archShadow)">
+    <rect width="880" height="85" rx="8" fill="#111827" stroke="#334155" stroke-width="1.5" />
+    <text x="20" y="24" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#94a3b8">INTERFACES &amp; COLLABORATION SURFACES</text>
+
+    <!-- Interface 1: CLI -->
+    <g transform="translate(20, 35)">
+      <rect width="265" height="40" rx="5" fill="#1e293b" stroke="#334155" stroke-width="1" />
+      <text x="14" y="24" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#f8fafc">Terminal CLI</text>
+      <text x="100" y="24" font-family="monospace" font-size="10" fill="#38bdf8">knobyte &lt;cmd&gt;</text>
+    </g>
+
+    <!-- Interface 2: MCP -->
+    <g transform="translate(305, 35)">
+      <rect width="270" height="40" rx="5" fill="#1e293b" stroke="#4f46e5" stroke-width="1" />
+      <text x="14" y="24" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#c7d2fe">Remote MCP Server</text>
+      <text x="148" y="24" font-family="system-ui, sans-serif" font-size="10" fill="#818cf8">22 Tools (SSE/Stdio)</text>
+    </g>
+
+    <!-- Interface 3: Hub -->
+    <g transform="translate(595, 35)">
+      <rect width="265" height="40" rx="5" fill="#1e293b" stroke="#059669" stroke-width="1" />
+      <text x="14" y="24" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#a7f3d0">Project Hub Web UI</text>
+      <text x="155" y="24" font-family="system-ui, sans-serif" font-size="10" fill="#34d399">Port 4000 (Fleet SPA)</text>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 380" width="100%" height="100%">
+  <defs>
+    <linearGradient id="groundBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0f19" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <filter id="gShadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <rect width="1000" height="380" rx="12" fill="url(#groundBg)" stroke="#1e293b" stroke-width="1.5" />
+
+  <!-- Header -->
+  <text x="500" y="36" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="700" fill="#38bdf8" text-anchor="middle">GROUNDING DRIFT AUDITING &amp; INLINE ANCHOR RELOCATION</text>
+
+  <!-- Step 1: Initial Spec & Baseline -->
+  <g transform="translate(40, 65)" filter="url(#gShadow)">
+    <rect width="210" height="280" rx="8" fill="#111827" stroke="#374151" stroke-width="1.5" />
+    <rect x="0" y="0" width="210" height="36" rx="8" fill="#1f2937" />
+    <text x="16" y="23" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#f8fafc">1. Grounded Spec</text>
+
+    <text x="14" y="60" font-family="system-ui, sans-serif" font-size="10" font-weight="600" fill="#94a3b8">YAML Frontmatter &amp; Inline:</text>
+    <rect x="12" y="70" width="186" height="75" rx="5" fill="#1e293b" stroke="#334155" stroke-width="1" />
+    <text x="20" y="90" font-family="monospace" font-size="9" fill="#93c5fd">grounds_to:</text>
+    <text x="20" y="106" font-family="monospace" font-size="9" fill="#38bdf8">  - fn:src/auth.rs:login</text>
+    <text x="20" y="126" font-family="monospace" font-size="9" fill="#64748b">&lt;!-- kb-ground: login --&gt;</text>
+
+    <text x="14" y="165" font-family="system-ui, sans-serif" font-size="10" font-weight="600" fill="#10b981">Baseline in SQLite:</text>
+    <rect x="12" y="175" width="186" height="60" rx="5" fill="#064e3b" stroke="#059669" stroke-width="1" />
+    <text x="20" y="195" font-family="monospace" font-size="9" fill="#a7f3d0">node_id: fn:src/auth:login</text>
+    <text x="20" y="213" font-family="monospace" font-size="9" fill="#a7f3d0">body_hash: a1c4...9f02</text>
+
+    <rect x="12" y="245" width="186" height="24" rx="4" fill="#0284c7" />
+    <text x="105" y="261" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff" text-anchor="middle">Health: 100% Intact</text>
+  </g>
+
+  <!-- Arrow 1 -> 2 -->
+  <path d="M 260 205 L 285 205" fill="none" stroke="#f59e0b" stroke-width="2" />
+  <polygon points="285,201 293,205 285,209" fill="#f59e0b" />
+
+  <!-- Step 2: Code Refactored -->
+  <g transform="translate(295, 65)" filter="url(#gShadow)">
+    <rect width="190" height="280" rx="8" fill="#111827" stroke="#d97706" stroke-width="1.5" />
+    <rect x="0" y="0" width="190" height="36" rx="8" fill="#78350f" />
+    <text x="16" y="23" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#fef3c7">2. Refactor Occurs</text>
+
+    <text x="14" y="60" font-family="system-ui, sans-serif" font-size="10" font-weight="600" fill="#f59e0b">Code Symbol Moved:</text>
+    <rect x="12" y="70" width="166" height="85" rx="5" fill="#1e293b" stroke="#334155" stroke-width="1" />
+    <text x="20" y="92" font-family="system-ui, sans-serif" font-size="10" fill="#ef4444">Deleted from:</text>
+    <text x="20" y="108" font-family="monospace" font-size="9" fill="#fca5a5">src/auth.rs</text>
+    <text x="20" y="128" font-family="system-ui, sans-serif" font-size="10" fill="#10b981">Relocated to:</text>
+    <text x="20" y="144" font-family="monospace" font-size="9" fill="#a7f3d0">src/security/login.rs</text>
+
+    <rect x="12" y="170" width="166" height="65" rx="5" fill="#451a03" stroke="#b45309" stroke-width="1" />
+    <text x="20" y="190" font-family="system-ui, sans-serif" font-size="10" font-weight="600" fill="#fde68a">Graph Rebuilt:</text>
+    <text x="20" y="208" font-family="monospace" font-size="9" fill="#fed7aa">old node_id missing</text>
+    <text x="20" y="224" font-family="monospace" font-size="9" fill="#fed7aa">new node_id indexed</text>
+
+    <rect x="12" y="245" width="166" height="24" rx="4" fill="#b45309" />
+    <text x="95" y="261" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#fef3c7" text-anchor="middle">AST Symbol Moved</text>
+  </g>
+
+  <!-- Arrow 2 -> 3 -->
+  <path d="M 495 205 L 520 205" fill="none" stroke="#ef4444" stroke-width="2" />
+  <polygon points="520,201 528,205 520,209" fill="#ef4444" />
+
+  <!-- Step 3: Drift Detected -->
+  <g transform="translate(530, 65)" filter="url(#gShadow)">
+    <rect width="190" height="280" rx="8" fill="#111827" stroke="#dc2626" stroke-width="1.5" />
+    <rect x="0" y="0" width="190" height="36" rx="8" fill="#7f1d1d" />
+    <text x="16" y="23" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#fee2e2">3. Drift Audit</text>
+
+    <text x="14" y="60" font-family="monospace" font-size="10" font-weight="600" fill="#ef4444">knobyte check</text>
+    <rect x="12" y="70" width="166" height="100" rx="5" fill="#1e293b" stroke="#334155" stroke-width="1" />
+    <text x="20" y="92" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ef4444">Score: 85.0%</text>
+    <text x="20" y="112" font-family="system-ui, sans-serif" font-size="9" fill="#cbd5e1">1 Missing Grounding:</text>
+    <text x="20" y="130" font-family="monospace" font-size="8" fill="#fca5a5">node not found in graph:</text>
+    <text x="20" y="146" font-family="monospace" font-size="8" fill="#fca5a5">fn:src/auth.rs:login</text>
+    <text x="20" y="162" font-family="system-ui, sans-serif" font-size="8" fill="#94a3b8">Alerts engineer &amp; agent</text>
+
+    <rect x="12" y="185" width="166" height="50" rx="5" fill="#450a0a" stroke="#991b1b" stroke-width="1" />
+    <text x="20" y="205" font-family="system-ui, sans-serif" font-size="10" fill="#fca5a5">Review Signal</text>
+    <text x="20" y="222" font-family="system-ui, sans-serif" font-size="9" fill="#94a3b8">Prevents hallucinations</text>
+
+    <rect x="12" y="245" width="166" height="24" rx="4" fill="#991b1b" />
+    <text x="95" y="261" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#fee2e2" text-anchor="middle">Broken Link Detected</text>
+  </g>
+
+  <!-- Arrow 3 -> 4 -->
+  <path d="M 730 205 L 755 205" fill="none" stroke="#10b981" stroke-width="2" />
+  <polygon points="755,201 763,205 755,209" fill="#10b981" />
+
+  <!-- Step 4: Self-Healing Sync -->
+  <g transform="translate(765, 65)" filter="url(#gShadow)">
+    <rect width="195" height="280" rx="8" fill="#111827" stroke="#059669" stroke-width="1.5" />
+    <rect x="0" y="0" width="195" height="36" rx="8" fill="#065f46" />
+    <text x="14" y="23" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#ecfdf5">4. Auto-Relocation</text>
+
+    <text x="14" y="60" font-family="monospace" font-size="10" font-weight="600" fill="#34d399">knobyte sync</text>
+    <rect x="12" y="70" width="171" height="100" rx="5" fill="#1e293b" stroke="#334155" stroke-width="1" />
+    <text x="20" y="90" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#34d399">AST Hash Match (100%)</text>
+    <text x="20" y="108" font-family="system-ui, sans-serif" font-size="9" fill="#cbd5e1">Automatically rewrites:</text>
+    <text x="20" y="126" font-family="monospace" font-size="8" fill="#93c5fd">grounds_to: new path</text>
+    <text x="20" y="142" font-family="monospace" font-size="8" fill="#93c5fd">&lt;!-- kb-ground: new --&gt;</text>
+    <text x="20" y="160" font-family="system-ui, sans-serif" font-size="8" fill="#a7f3d0">Updates baseline in SQLite</text>
+
+    <rect x="12" y="185" width="171" height="50" rx="5" fill="#064e3b" stroke="#059669" stroke-width="1" />
+    <text x="20" y="205" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#a7f3d0">Self-Healing Complete</text>
+    <text x="20" y="222" font-family="system-ui, sans-serif" font-size="9" fill="#94a3b8">Zero manual edits needed</text>
+
+    <rect x="12" y="245" width="171" height="24" rx="4" fill="#059669" />
+    <text x="97" y="261" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#ffffff" text-anchor="middle">Score: 100% Restored</text>
+  </g>
+</svg>

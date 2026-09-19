@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" width="100%" height="100%">
+  <defs>
+    <linearGradient id="crBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0f19" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <filter id="crShadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <rect width="1000" height="400" rx="12" fill="url(#crBg)" stroke="#1e293b" stroke-width="1.5" />
+
+  <!-- Header -->
+  <text x="500" y="36" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="700" fill="#38bdf8" text-anchor="middle">AGENT CONTEXT ROUTING &amp; MCP RETRIEVAL FLOW</text>
+
+  <!-- Step 1: Agent & Prompt -->
+  <g transform="translate(50, 70)" filter="url(#crShadow)">
+    <rect width="210" height="290" rx="8" fill="#111827" stroke="#374151" stroke-width="1.5" />
+    <rect x="0" y="0" width="210" height="36" rx="8" fill="#1f2937" />
+    <text x="16" y="23" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#f8fafc">1. Coding Agent</text>
+
+    <text x="14" y="60" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#38bdf8">Supported Hosts:</text>
+    <rect x="12" y="70" width="186" height="85" rx="5" fill="#1e293b" stroke="#334155" stroke-width="1" />
+    <text x="22" y="92" font-family="system-ui, sans-serif" font-size="10" fill="#cbd5e1">• Cursor / Windsurf</text>
+    <text x="22" y="110" font-family="system-ui, sans-serif" font-size="10" fill="#cbd5e1">• Claude Desktop / Code</text>
+    <text x="22" y="128" font-family="system-ui, sans-serif" font-size="10" fill="#cbd5e1">• Codex / Antigravity</text>
+    <text x="22" y="146" font-family="system-ui, sans-serif" font-size="10" fill="#cbd5e1">• Cline / OpenCode</text>
+
+    <text x="14" y="175" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#f59e0b">Developer Prompt:</text>
+    <rect x="12" y="185" width="186" height="75" rx="5" fill="#0f172a" stroke="#1e293b" stroke-width="1" />
+    <text x="20" y="205" font-family="system-ui, sans-serif" font-size="9" fill="#94a3b8">"Refactor webhook retry</text>
+    <text x="20" y="221" font-family="system-ui, sans-serif" font-size="9" fill="#94a3b8">logic to support exponential</text>
+    <text x="20" y="237" font-family="system-ui, sans-serif" font-size="9" fill="#94a3b8">backoff &amp; idempotency"</text>
+
+    <rect x="12" y="270" width="186" height="15" fill="none" />
+  </g>
+
+  <!-- Arrow 1 -> 2 -->
+  <path d="M 270 205 L 300 205" fill="none" stroke="#38bdf8" stroke-width="2" />
+  <polygon points="300,201 308,205 300,209" fill="#38bdf8" />
+
+  <!-- Step 2: Router & MCP -->
+  <g transform="translate(315, 70)" filter="url(#crShadow)">
+    <rect width="320" height="290" rx="8" fill="#111827" stroke="#4f46e5" stroke-width="1.5" />
+    <rect x="0" y="0" width="320" height="36" rx="8" fill="#312e81" />
+    <text x="16" y="23" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#e0e7ff">2. Router &amp; MCP Protocol Tools</text>
+
+    <!-- Router box -->
+    <rect x="14" y="48" width="292" height="60" rx="5" fill="#1e293b" stroke="#334155" stroke-width="1" />
+    <text x="24" y="68" font-family="monospace" font-size="10" font-weight="700" fill="#38bdf8">.knobyte/ROUTER.md</text>
+    <text x="24" y="85" font-family="system-ui, sans-serif" font-size="9" fill="#94a3b8">Maps task domain → context/stack.md, architecture.md</text>
+    <text x="24" y="100" font-family="system-ui, sans-serif" font-size="9" fill="#94a3b8">Instructs agent on query tools</text>
+
+    <!-- MCP Tools Grid -->
+    <text x="14" y="128" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#c7d2fe">Knobyte MCP Engine (22 Native Tools):</text>
+    <rect x="14" y="138" width="292" height="135" rx="5" fill="#0f172a" stroke="#4338ca" stroke-width="1" />
+
+    <rect x="22" y="148" width="276" height="26" rx="4" fill="#1e1e2e" />
+    <text x="30" y="165" font-family="monospace" font-size="9" font-weight="700" fill="#38bdf8">knobyte_graph_scope("webhook retry")</text>
+
+    <rect x="22" y="180" width="276" height="26" rx="4" fill="#1e1e2e" />
+    <text x="30" y="197" font-family="monospace" font-size="9" font-weight="700" fill="#818cf8">knobyte_vector_search("exponential backoff")</text>
+
+    <rect x="22" y="212" width="276" height="26" rx="4" fill="#1e1e2e" />
+    <text x="30" y="229" font-family="monospace" font-size="9" font-weight="700" fill="#34d399">knobyte_wiki_query("retry idempotency")</text>
+
+    <rect x="22" y="244" width="276" height="22" rx="4" fill="#1e1e2e" />
+    <text x="30" y="259" font-family="monospace" font-size="9" font-weight="700" fill="#f59e0b">knobyte_graph_query("who-calls", "retry")</text>
+  </g>
+
+  <!-- Arrow 2 -> 3 -->
+  <path d="M 645 205 L 675 205" fill="none" stroke="#10b981" stroke-width="2" />
+  <polygon points="675,201 683,205 675,209" fill="#10b981" />
+
+  <!-- Step 3: Grounded Implementation -->
+  <g transform="translate(690, 70)" filter="url(#crShadow)">
+    <rect width="260" height="290" rx="8" fill="#111827" stroke="#059669" stroke-width="1.5" />
+    <rect x="0" y="0" width="260" height="36" rx="8" fill="#065f46" />
+    <text x="16" y="23" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#ecfdf5">3. Grounded Output</text>
+
+    <text x="14" y="60" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#34d399">Deterministic Context Injected:</text>
+    <rect x="12" y="70" width="236" height="110" rx="5" fill="#1e293b" stroke="#334155" stroke-width="1" />
+    <text x="22" y="92" font-family="system-ui, sans-serif" font-size="10" fill="#f8fafc">• Exact AST call hierarchy &amp; types</text>
+    <text x="22" y="112" font-family="system-ui, sans-serif" font-size="10" fill="#f8fafc">• Preserves team architectural rules</text>
+    <text x="22" y="132" font-family="system-ui, sans-serif" font-size="10" fill="#f8fafc">• Grounded code symbol pointers</text>
+    <text x="22" y="152" font-family="system-ui, sans-serif" font-size="10" fill="#f8fafc">• Bounded scope: Zero hallucinations</text>
+    <text x="22" y="170" font-family="system-ui, sans-serif" font-size="9" fill="#6ee7b7">Ready for human verification &amp; tests</text>
+
+    <rect x="12" y="195" width="236" height="80" rx="5" fill="#064e3b" stroke="#059669" stroke-width="1" />
+    <text x="22" y="218" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#a7f3d0">Next Step in Workflow:</text>
+    <text x="22" y="238" font-family="system-ui, sans-serif" font-size="9" fill="#cbd5e1">Agent captures findings into:</text>
+    <text x="22" y="254" font-family="monospace" font-size="9" fill="#6ee7b7">• knobyte inbox draft (Proposals)</text>
+    <text x="22" y="268" font-family="monospace" font-size="9" fill="#6ee7b7">• knobyte relay draft (Handoffs)</text>
+  </g>
+</svg>

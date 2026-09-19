@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 500" width="100%" height="100%">
+  <defs>
+    <linearGradient id="hubBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#090d16" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="avatarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+    <filter id="hubShadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000000" flood-opacity="0.5" />
+    </filter>
+  </defs>
+
+  <!-- Outer Canvas -->
+  <rect width="1000" height="500" rx="14" fill="url(#hubBg)" stroke="#1e293b" stroke-width="1.5" />
+
+  <!-- Top App Window Bar -->
+  <path d="M 0 14 C 0 6.27 6.27 0 14 0 L 986 0 C 993.73 0 1000 6.27 1000 14 L 1000 45 L 0 45 Z" fill="#0b1120" />
+  <circle cx="24" cy="22" r="5.5" fill="#ef4444" />
+  <circle cx="42" cy="22" r="5.5" fill="#f59e0b" />
+  <circle cx="60" cy="22" r="5.5" fill="#10b981" />
+  <text x="500" y="27" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#94a3b8" text-anchor="middle">Project Memory Hub — http://127.0.0.1:4000</text>
+  <rect x="880" y="12" width="95" height="22" rx="11" fill="#1e293b" />
+  <text x="927" y="27" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#38bdf8" text-anchor="middle">v0.9.1 PURE RUST</text>
+
+  <!-- Left Sidebar (Width 180) -->
+  <g transform="translate(0, 45)">
+    <rect width="180" height="455" fill="#0f172a" stroke="#1e293b" stroke-width="1" />
+
+    <!-- Brand / Logo -->
+    <rect x="18" y="16" width="28" height="28" rx="6" fill="#0284c7" />
+    <path d="M 26 23 L 38 23 L 38 27 L 34 27 L 34 37 L 30 37 L 30 27 L 26 27 Z" fill="#ffffff" />
+    <text x="54" y="35" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="#f8fafc">Project Hub</text>
+
+    <!-- Nav Items -->
+    <rect x="12" y="65" width="156" height="30" rx="5" fill="#1e293b" />
+    <text x="36" y="85" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#38bdf8">Overview</text>
+    <circle cx="24" cy="80" r="3" fill="#38bdf8" />
+
+    <text x="36" y="115" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Fleet Registry</text>
+    <text x="36" y="145" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Tree-sitter Graph</text>
+    <text x="36" y="175" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">CozoDB Vectors</text>
+    <text x="36" y="205" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Wiki Documents</text>
+    <text x="36" y="235" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Relays (Handoffs)</text>
+    <text x="36" y="265" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Inbox Proposals</text>
+    <text x="36" y="295" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Team Members</text>
+    <text x="36" y="325" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Audit &amp; Activity</text>
+
+    <!-- Server status pill -->
+    <rect x="16" y="405" width="148" height="32" rx="6" fill="#111827" stroke="#1f2937" stroke-width="1" />
+    <circle cx="30" cy="421" r="4" fill="#10b981" />
+    <text x="42" y="425" font-family="system-ui, sans-serif" font-size="10" font-weight="600" fill="#e2e8f0">Local SSE &amp; Stdio</text>
+  </g>
+
+  <!-- Main View Area (Width 820, Height 455) -->
+  <g transform="translate(195, 60)">
+    <!-- Header -->
+    <text x="0" y="22" font-family="system-ui, sans-serif" font-size="18" font-weight="700" fill="#f8fafc">Project Fleet &amp; Memory Dashboard</text>
+    <rect x="670" y="5" width="115" height="24" rx="12" fill="#065f46" stroke="#059669" stroke-width="1" />
+    <text x="727" y="21" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#a7f3d0" text-anchor="middle">DRIFT: 100% HEALTHY</text>
+
+    <!-- Metric Cards Row -->
+    <g transform="translate(0, 40)">
+      <!-- Card 1 -->
+      <rect width="185" height="75" rx="8" fill="#111827" stroke="#1e293b" stroke-width="1.5" />
+      <text x="14" y="24" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Drift Score</text>
+      <text x="14" y="56" font-family="system-ui, sans-serif" font-size="22" font-weight="800" fill="#10b981">100.0%</text>
+      <text x="140" y="56" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">PRISTINE</text>
+
+      <!-- Card 2 -->
+      <rect x="200" width="185" height="75" rx="8" fill="#111827" stroke="#1e293b" stroke-width="1.5" />
+      <text x="214" y="24" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Code Graph Nodes</text>
+      <text x="214" y="56" font-family="system-ui, sans-serif" font-size="22" font-weight="800" fill="#38bdf8">384</text>
+      <text x="325" y="56" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">492 EDGES</text>
+
+      <!-- Card 3 -->
+      <rect x="400" width="185" height="75" rx="8" fill="#111827" stroke="#1e293b" stroke-width="1.5" />
+      <text x="414" y="24" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">HNSW Embeddings</text>
+      <text x="414" y="56" font-family="system-ui, sans-serif" font-size="22" font-weight="800" fill="#818cf8">128-dim</text>
+      <text x="535" y="56" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">COZODB</text>
+
+      <!-- Card 4 -->
+      <rect x="600" width="185" height="75" rx="8" fill="#111827" stroke="#1e293b" stroke-width="1.5" />
+      <text x="614" y="24" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Wiki &amp; Relays</text>
+      <text x="614" y="56" font-family="system-ui, sans-serif" font-size="22" font-weight="800" fill="#f59e0b">5 / 2</text>
+      <text x="735" y="56" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">FTS5</text>
+    </g>
+
+    <!-- Lower Split: Left Project List (490), Right Contributor Impact (285) -->
+    <g transform="translate(0, 130)">
+      <!-- Left Projects Panel -->
+      <rect width="490" height="280" rx="8" fill="#111827" stroke="#1e293b" stroke-width="1.5" />
+      <text x="16" y="26" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="#f8fafc">Local Repositories (Fleet)</text>
+
+      <!-- Project Item 1 -->
+      <rect x="16" y="38" width="458" height="52" rx="6" fill="#1e293b" stroke="#0284c7" stroke-width="1" />
+      <text x="30" y="58" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#38bdf8">orion-platform</text>
+      <rect x="125" y="47" width="52" height="15" rx="7.5" fill="#0369a1" />
+      <text x="151" y="58" font-family="system-ui, sans-serif" font-size="9" font-weight="700" fill="#e0f2fe" text-anchor="middle">ACTIVE</text>
+      <text x="30" y="77" font-family="system-ui, sans-serif" font-size="10.5" fill="#94a3b8">Path: /workspace/projects/orion-platform • 100% Drift Health</text>
+      <text x="415" y="68" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#10b981">100.0%</text>
+
+      <!-- Project Item 2 -->
+      <rect x="16" y="96" width="458" height="52" rx="6" fill="#0f172a" stroke="#1e293b" stroke-width="1" />
+      <text x="30" y="116" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#cbd5e1">aurora-service</text>
+      <rect x="125" y="105" width="52" height="15" rx="7.5" fill="#1e293b" />
+      <text x="151" y="116" font-family="system-ui, sans-serif" font-size="9" font-weight="700" fill="#94a3b8" text-anchor="middle">SYNCED</text>
+      <text x="30" y="135" font-family="system-ui, sans-serif" font-size="10.5" fill="#94a3b8">Path: /workspace/projects/aurora-service • 98.4% Drift Health</text>
+      <text x="415" y="126" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#10b981">98.4%</text>
+
+      <!-- Live Activity rows -->
+      <text x="16" y="172" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#e2e8f0">Audit Feed &amp; Decisions</text>
+      <rect x="16" y="184" width="458" height="38" rx="4" fill="#0f172a" />
+      <rect x="26" y="193" width="60" height="18" rx="3" fill="#1e3a8a" />
+      <text x="56" y="206" font-family="system-ui, sans-serif" font-size="9" font-weight="700" fill="#93c5fd" text-anchor="middle">DECISION</text>
+      <text x="96" y="207" font-family="system-ui, sans-serif" font-size="10" fill="#cbd5e1">Core architecture initialized: modular event-driven service engine</text>
+
+      <rect x="16" y="228" width="458" height="38" rx="4" fill="#0f172a" />
+      <rect x="26" y="237" width="60" height="18" rx="3" fill="#065f46" />
+      <text x="56" y="250" font-family="system-ui, sans-serif" font-size="9" font-weight="700" fill="#6ee7b7" text-anchor="middle">GROUND</text>
+      <text x="96" y="251" font-family="system-ui, sans-serif" font-size="10" fill="#cbd5e1">Synchronized 384 AST node anchors to graph baseline</text>
+
+      <!-- Right Contributor Panel -->
+      <g transform="translate(505, 0)">
+        <rect width="280" height="280" rx="8" fill="#111827" stroke="#1e293b" stroke-width="1.5" />
+        <text x="16" y="26" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="#f8fafc">Contributors &amp; Impact</text>
+
+        <!-- Contributor Card -->
+        <rect x="16" y="42" width="248" height="100" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1" />
+        <circle cx="38" cy="68" r="16" fill="url(#avatarGrad)" />
+        <text x="38" y="73" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">A</text>
+        <text x="64" y="65" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="#f8fafc">Alex Rivera</text>
+        <text x="64" y="80" font-family="system-ui, sans-serif" font-size="10" fill="#94a3b8">@alexrivera • active</text>
+
+        <!-- Metric badges inside card -->
+        <g transform="translate(24, 100)">
+          <rect width="66" height="28" rx="4" fill="#0f172a" />
+          <text x="33" y="112" font-family="system-ui, sans-serif" font-size="9" fill="#94a3b8" text-anchor="middle">Decisions</text>
+          <text x="33" y="124" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#38bdf8" text-anchor="middle">4</text>
+
+          <rect x="74" width="66" height="28" rx="4" fill="#0f172a" />
+          <text x="107" y="112" font-family="system-ui, sans-serif" font-size="9" fill="#94a3b8" text-anchor="middle">Projects</text>
+          <text x="107" y="124" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#10b981" text-anchor="middle">2</text>
+
+          <rect x="148" width="66" height="28" rx="4" fill="#0f172a" />
+          <text x="181" y="112" font-family="system-ui, sans-serif" font-size="9" fill="#94a3b8" text-anchor="middle">Relays</text>
+          <text x="181" y="124" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#f59e0b" text-anchor="middle">1</text>
+        </g>
+
+        <!-- Click to inspect hint -->
+        <rect x="16" y="155" width="248" height="110" rx="6" fill="#0f172a" stroke="#1f2937" stroke-width="1" />
+        <text x="28" y="180" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="#38bdf8">Click-to-Inspect Drawer</text>
+        <text x="28" y="200" font-family="system-ui, sans-serif" font-size="10" fill="#94a3b8">• Breakdown of touched files</text>
+        <text x="28" y="218" font-family="system-ui, sans-serif" font-size="10" fill="#94a3b8">• Multi-project impact</text>
+        <text x="28" y="236" font-family="system-ui, sans-serif" font-size="10" fill="#94a3b8">• Claimed &amp; authored handoffs</text>
+      </g>
+    </g>
+  </g>
+</svg>

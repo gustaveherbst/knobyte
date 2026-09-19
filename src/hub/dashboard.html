@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knobyte Project Hub — __REPO__</title>
+    <style>
+        :root {
+            --bg: #090d12;
+            --sidebar-bg: #0e131a;
+            --surface: #131922;
+            --surface-elevated: #1a2330;
+            --border: #232d3d;
+            --border-hover: #38bdf8;
+            --text: #cbd5e1;
+            --text-heading: #f8fafc;
+            --text-muted: #64748b;
+            --accent: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.15);
+            --success: #34d399;
+            --warning: #fbbf24;
+            --danger: #f87171;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+        }
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        *:focus {
+            outline: none;
+        }
+        html {
+            background-color: var(--bg);
+            color: var(--text);
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* SIDEBAR - STABLE, ZERO BOUNCE */
+        #sidebar {
+            width: 260px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 1.5rem 1rem;
+            flex-shrink: 0;
+            z-index: 10;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .brand {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: var(--text-heading);
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0 0.5rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            letter-spacing: -0.02em;
+        }
+        .brand-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent);
+            flex-shrink: 0;
+        }
+        .nav-links {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            margin-top: 1.25rem;
+            list-style: none;
+        }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.65rem 0.85rem;
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid transparent;
+            background-color: transparent;
+            transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+            text-decoration: none;
+            user-select: none;
+            -webkit-user-select: none;
+            outline: none;
+            transform: none !important;
+        }
+        .nav-item:hover {
+            background-color: rgba(56, 189, 248, 0.08);
+            color: var(--text-heading);
+            border-color: rgba(56, 189, 248, 0.15);
+            transform: none !important;
+        }
+        .nav-item.active {
+            background-color: var(--accent-glow);
+            color: var(--accent);
+            border-color: rgba(56, 189, 248, 0.35);
+            font-weight: 600;
+            transform: none !important;
+        }
+        .nav-item:active, .nav-item:focus {
+            outline: none;
+            -webkit-tap-highlight-color: transparent;
+            transform: none !important;
+        }
+        .nav-icon {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+            stroke: currentColor;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .sidebar-bottom {
+            padding: 1rem 0.5rem 0;
+            border-top: 1px solid var(--border);
+        }
+        .repo-badge {
+            font-size: 0.75rem;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+            word-break: break-all;
+        }
+
+        /* MAIN CONTENT AREA */
+        #content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            background: var(--bg);
+        }
+
+        /* TOPBAR */
+        #topbar {
+            height: 64px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            flex-shrink: 0;
+        }
+        .search-box {
+            position: relative;
+            width: 380px;
+        }
+        .search-input {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.5rem 1rem 0.5rem 2.4rem;
+            color: var(--text-heading);
+            font-size: 0.85rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-input:focus {
+            border-color: var(--accent);
+        }
+        .search-icon-wrap {
+            position: absolute;
+            left: 0.8rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            pointer-events: none;
+        }
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .status-pill {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.3rem 0.7rem;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        /* MAIN VIEWS - ROCK SOLID LAYOUT */
+        .view-panel {
+            display: none;
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        .view-panel.active-view {
+            display: block;
+        }
+        .view-title {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: var(--text-heading);
+            margin-bottom: 0.25rem;
+        }
+        .view-desc {
+            font-size: 0.88rem;
+            color: var(--text-muted);
+            margin-bottom: 1.5rem;
+        }
+
+        /* ANALYTICS BANNER */
+        .analytics-banner {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 1.5rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            align-items: center;
+        }
+        @media (max-width: 900px) {
+            .analytics-banner { grid-template-columns: 1fr; }
+        }
+        .chart-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .chart-legend {
+            display: flex;
+            gap: 1rem;
+            margin-top: 0.75rem;
+            font-size: 0.75rem;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .stats-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1.25rem;
+        }
+        .kpi-card {
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            transition: border-color 0.2s ease;
+            transform: none !important;
+        }
+        .kpi-card:hover {
+            border-color: var(--border-hover);
+            transform: none !important;
+        }
+        .kpi-val {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--text-heading);
+        }
+        .kpi-lbl {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            margin-top: 0.2rem;
+        }
+
+        /* PROJECTS GRID - ZERO MOVEMENT ON HOVER */
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+            gap: 1.25rem;
+        }
+        .project-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.25rem;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            transform: none !important;
+        }
+        .project-card:hover {
+            border-color: var(--border-hover);
+            box-shadow: 0 0 16px rgba(56, 189, 248, 0.08);
+            transform: none !important;
+        }
+        .project-card.card-active {
+            border-color: rgba(56, 189, 248, 0.4);
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.08);
+        }
+        .project-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        .project-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-heading);
+        }
+        .project-path {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.2rem;
+        }
+        .project-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+            background: var(--surface-elevated);
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        .stat-mini-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+        .stat-mini-val {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--text-heading);
+            font-family: var(--font-mono);
+        }
+        .project-card-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border);
+            padding-top: 0.75rem;
+        }
+        .mode-badge {
+            background: var(--surface-elevated);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+        }
+
+        /* CONTRIBUTORS VIEW - ZERO MOVEMENT ON HOVER */
+        .contributors-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.25rem;
+        }
+        .contributor-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.25rem;
+            cursor: pointer;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            transform: none !important;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .contributor-card:hover {
+            border-color: var(--accent);
+            box-shadow: 0 4px 20px rgba(56, 189, 248, 0.12);
+            transform: none !important;
+        }
+        .contributor-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        .avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            color: #0b0f14;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+        .contributor-meta { flex: 1; }
+        .contributor-name {
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--text-heading);
+        }
+        .contributor-handle {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+        .contributor-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+            background: var(--surface-elevated);
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-bottom: 0.9rem;
+            text-align: center;
+        }
+        .c-val {
+            font-weight: 800;
+            font-size: 1.15rem;
+            color: var(--text-heading);
+            font-family: var(--font-mono);
+        }
+        .c-lbl {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .contributor-task {
+            background: rgba(56, 189, 248, 0.08);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            padding: 0.45rem 0.65rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .click-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-align: right;
+            transition: color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.35rem;
+        }
+        .contributor-card:hover .click-hint {
+            color: var(--accent);
+        }
+
+        /* SLIDE-OUT DRAWER */
+        #contributor-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(4px);
+            z-index: 100;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.25s ease;
+        }
+        #contributor-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+        #contributor-drawer {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 580px;
+            max-width: 90vw;
+            height: 100vh;
+            background: var(--surface);
+            border-left: 1px solid var(--border);
+            z-index: 101;
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            overflow-y: auto;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        #contributor-drawer.active {
+            transform: translateX(0);
+        }
+        .drawer-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1.25rem;
+        }
+        .drawer-close {
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            color: var(--text);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s, color 0.15s;
+        }
+        .drawer-close:hover {
+            background: var(--border);
+            color: var(--text-heading);
+        }
+
+        /* TIMELINE & ACTIVITY */
+        .activity-feed {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .activity-row {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            display: grid;
+            grid-template-columns: 160px 1fr 140px;
+            gap: 1.25rem;
+            align-items: start;
+            transition: border-color 0.2s ease;
+            transform: none !important;
+        }
+        .activity-row:hover {
+            border-color: var(--border-hover);
+            transform: none !important;
+        }
+        .actor-title {
+            font-weight: 700;
+            font-family: var(--font-mono);
+            font-size: 0.88rem;
+            color: var(--text-heading);
+        }
+        .act-summary {
+            font-size: 0.9rem;
+            color: var(--text);
+            line-height: 1.4;
+        }
+        .act-col-time {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+            text-align: right;
+        }
+        .file-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-top: 0.4rem;
+        }
+        .file-pill {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            color: var(--accent);
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        /* BADGES */
+        .badge {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.2rem 0.5rem;
+            border-radius: 9999px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        .badge-accent { background: var(--accent-glow); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.3); }
+        .badge-success { background: rgba(52, 211, 153, 0.15); color: var(--success); border: 1px solid rgba(52, 211, 153, 0.3); }
+        .badge-warning { background: rgba(251, 191, 36, 0.15); color: var(--warning); border: 1px solid rgba(251, 191, 36, 0.3); }
+        .badge-neutral { background: rgba(100, 116, 139, 0.15); color: var(--text-muted); border: 1px solid var(--border); }
+        .badge-decision { background: rgba(56, 189, 248, 0.2); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.4); }
+        .badge-discovery { background: rgba(251, 191, 36, 0.2); color: var(--warning); border: 1px solid rgba(251, 191, 36, 0.4); }
+        .badge-risk { background: rgba(248, 113, 113, 0.2); color: var(--danger); border: 1px solid rgba(248, 113, 113, 0.4); }
+        .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); flex-shrink: 0; }
+        .empty-state { padding: 3rem; text-align: center; color: var(--text-muted); font-size: 0.95rem; }
+    </style>
+</head>
+<body>
+    <!-- PERSISTENT SIDEBAR -->
+    <aside id="sidebar">
+        <div>
+            <div class="brand">
+                <span class="brand-dot"></span>
+                <span>Knobyte Hub</span>
+            </div>
+            <ul class="nav-links">
+                <li class="nav-item active" onclick="switchTab('fleet')" id="nav-fleet">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                        <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                        <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                        <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                    </svg>
+                    <span>Fleet Overview</span>
+                </li>
+                <li class="nav-item" onclick="switchTab('workspace')" id="nav-workspace">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <span>Active Workspace</span>
+                </li>
+                <li class="nav-item" onclick="switchTab('contributors')" id="nav-contributors">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    <span>Contributors & Team</span>
+                </li>
+                <li class="nav-item" onclick="switchTab('activity')" id="nav-activity">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                    </svg>
+                    <span>Live Audit Feed</span>
+                </li>
+                <li class="nav-item" onclick="switchTab('mcp')" id="nav-mcp">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                        <rect x="9" y="9" width="6" height="6"></rect>
+                        <line x1="9" y1="1" x2="9" y2="4"></line>
+                        <line x1="15" y1="1" x2="15" y2="4"></line>
+                        <line x1="9" y1="20" x2="9" y2="23"></line>
+                        <line x1="15" y1="20" x2="15" y2="23"></line>
+                        <line x1="20" y1="9" x2="23" y2="9"></line>
+                        <line x1="20" y1="14" x2="23" y2="14"></line>
+                        <line x1="1" y1="9" x2="4" y2="9"></line>
+                        <line x1="1" y1="14" x2="4" y2="14"></line>
+                    </svg>
+                    <span>MCP & Protocols</span>
+                </li>
+            </ul>
+        </div>
+        <div class="sidebar-bottom">
+            <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-heading); margin-bottom: 0.25rem;">Active Repository</div>
+            <div class="repo-badge">__REPO__</div>
+            <div style="margin-top: 0.6rem; display: flex; gap: 0.5rem;">
+                <span class="badge badge-accent">v__VERSION__</span>
+                <span class="badge badge-success">WAL Mode</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- CONTENT WRAPPER -->
+    <div id="content">
+        <!-- TOPBAR -->
+        <header id="topbar">
+            <div class="search-box">
+                <span class="search-icon-wrap">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                </span>
+                <input type="text" id="global-search" class="search-input" placeholder="Search projects, contributors, or files..." oninput="handleSearch(this.value)">
+            </div>
+            <div class="topbar-actions">
+                <span class="status-pill badge-accent">
+                    <span class="pulse-dot"></span>
+                    <span>MCP SSE: Port 3005</span>
+                </span>
+                <span class="status-pill badge-neutral">
+                    <span>__TOTAL_PROJECTS__ Fleet Projects</span>
+                </span>
+            </div>
+        </header>
+
+        <!-- VIEW 1: FLEET OVERVIEW -->
+        <section id="view-fleet" class="view-panel active-view">
+            <h1 class="view-title">Projects Fleet Overview</h1>
+            <p class="view-desc">Monitor and manage all unlimited Knobyte repositories indexed on this system</p>
+
+            <div class="analytics-banner">
+                <div class="chart-container">
+                    <svg width="150" height="150" viewBox="0 0 42 42">
+                        <!-- Donut Chart: Healthy vs Warning vs Drifted -->
+                        <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#232d3d" stroke-width="5"></circle>
+                        <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="var(--success)" stroke-width="5" stroke-dasharray="__HEALTHY_DASH__ __HEALTHY_SPACE__" stroke-dashoffset="25"></circle>
+                        <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="var(--warning)" stroke-width="5" stroke-dasharray="__WARNING_DASH__ __WARNING_SPACE__" stroke-dashoffset="__WARNING_OFFSET__"></circle>
+                    </svg>
+                    <div class="chart-legend">
+                        <div class="legend-item"><span class="legend-dot" style="background: var(--success);"></span> Intact (__HEALTHY_PROJECTS__)</div>
+                        <div class="legend-item"><span class="legend-dot" style="background: var(--warning);"></span> Warning (__WARNING_PROJECTS__)</div>
+                        <div class="legend-item"><span class="legend-dot" style="background: var(--danger);"></span> Drift (__DRIFTED_PROJECTS__)</div>
+                    </div>
+                </div>
+                <div class="stats-kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-val">__TOTAL_PROJECTS__</div>
+                        <div class="kpi-lbl">Total Projects</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-val" style="color: var(--success);">__HEALTHY_PROJECTS__</div>
+                        <div class="kpi-lbl">Healthy Grounded</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-val">__TOTAL_CONTRIBUTORS__</div>
+                        <div class="kpi-lbl">Active Contributors</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-val">__GRAPH_NODES__</div>
+                        <div class="kpi-lbl">Indexed Symbols</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="projects-grid" id="projects-grid">
+                __PROJECT_CARDS__
+            </div>
+        </section>
+
+        <!-- VIEW 2: ACTIVE WORKSPACE -->
+        <section id="view-workspace" class="view-panel">
+            <h1 class="view-title">Active Workspace: __REPO__</h1>
+            <p class="view-desc">Deep neuro-symbolic code graph, drift detection, and full-text wiki intelligence</p>
+
+            <div class="stats-kpi-grid" style="margin-bottom: 2rem;">
+                <div class="kpi-card">
+                    <div class="kpi-val" style="color: var(--success);">__DRIFT_SCORE__%</div>
+                    <div class="kpi-lbl">Grounding Score</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-val">__FILE_COUNT__</div>
+                    <div class="kpi-lbl">Scaffold Context Files</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-val">__GRAPH_NODES__</div>
+                    <div class="kpi-lbl">AST Code Nodes</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-val">__GRAPH_EDGES__</div>
+                    <div class="kpi-lbl">Call / Dependency Edges</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-val">__WIKI_COUNT__</div>
+                    <div class="kpi-lbl">FTS5 Wiki Topics</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-val">__RELAYS_COUNT__</div>
+                    <div class="kpi-lbl">Preserved Relays</div>
+                </div>
+            </div>
+
+            <div class="kpi-card" style="margin-bottom: 1.5rem;">
+                <h3 style="color: var(--text-heading); margin-bottom: 0.5rem;">Neuro-Symbolic Engines Ready</h3>
+                <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.6;">
+                    &bull; <strong>Tree-sitter AST Graph:</strong> SQLite WAL mode at <code>.knobyte/graph.db</code> indexing functions, structs, classes, and call relationships.<br>
+                    &bull; <strong>CozoDB Sled Engine:</strong> Hybrid Datalog queries, PageRank centrality, BFS shortest paths, and 128-dimensional dense HNSW vector similarity search at <code>.knobyte/cozo.db</code>.<br>
+                    &bull; <strong>FTS5 Wiki Index:</strong> Full-text keyword search and cross-topic bidirectional relationships at <code>.knobyte/wiki.db</code>.
+                </p>
+            </div>
+        </section>
+
+        <!-- VIEW 3: CONTRIBUTORS & TEAM -->
+        <section id="view-contributors" class="view-panel">
+            <h1 class="view-title">Contributors & Team Impact</h1>
+            <p class="view-desc">Click any individual contributor card below to inspect their change history, touched projects, and decisions</p>
+
+            <div class="contributors-grid" id="contributors-grid">
+                __CONTRIBUTOR_CARDS__
+            </div>
+        </section>
+
+        <!-- VIEW 4: LIVE AUDIT FEED -->
+        <section id="view-activity" class="view-panel">
+            <h1 class="view-title">Live Activity & Decision Feed</h1>
+            <p class="view-desc">Real-time chronological timeline of architectural decisions, discoveries, and file touches</p>
+
+            <div class="activity-feed" id="activity-feed">
+                __TIMELINE_ROWS__
+            </div>
+        </section>
+
+        <!-- VIEW 5: MCP & PROTOCOLS -->
+        <section id="view-mcp" class="view-panel">
+            <h1 class="view-title">Model Context Protocol (MCP) Server</h1>
+            <p class="view-desc">Unified remote SSE and Stdio interface enabling seamless AI agent workflows</p>
+
+            <div class="kpi-card" style="margin-bottom: 1.5rem;">
+                <h3 style="color: var(--text-heading); margin-bottom: 0.75rem;">Remote SSE Server Endpoints</h3>
+                <div style="font-family: var(--font-mono); font-size: 0.85rem; line-height: 2;">
+                    <div>&bull; Dashboard: <span style="color: var(--accent);">http://localhost:3005/dashboard</span></div>
+                    <div>&bull; SSE Stream: <span style="color: var(--accent);">http://localhost:3005/sse</span></div>
+                    <div>&bull; Messages: <span style="color: var(--accent);">http://localhost:3005/messages</span></div>
+                    <div>&bull; Health Check: <span style="color: var(--accent);">http://localhost:3005/health</span></div>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <h3 style="color: var(--text-heading); margin-bottom: 0.75rem;">21 Registered Knobyte MCP Tools</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.6;">
+                    <code>knobyte_check</code>, <code>knobyte_graph_query</code>, <code>knobyte_graph_scope</code>, <code>knobyte_graph_get</code>, <code>knobyte_graph_status</code>,
+                    <code>knobyte_wiki_query</code>, <code>knobyte_wiki_show</code>, <code>knobyte_wiki_list</code>, <code>knobyte_log</code>, <code>knobyte_timeline</code>,
+                    <code>knobyte_heartbeat</code>, <code>knobyte_read_file</code>, <code>knobyte_vector_search</code>, <code>knobyte_cozo_datalog</code>, <code>knobyte_cozo_pagerank</code>,
+                    <code>knobyte_cozo_shortest_path</code>, <code>knobyte_relay_list</code>, <code>knobyte_relay_draft</code>, <code>knobyte_inbox_draft</code>, <code>knobyte_member_list</code>, <code>knobyte_member_current</code>.
+                </p>
+            </div>
+        </section>
+    </div>
+
+    <!-- CONTRIBUTOR INSPECTION DRAWER OVERLAY -->
+    <div id="contributor-overlay" onclick="closeContributorDrawer()"></div>
+    <div id="contributor-drawer">
+        <div class="drawer-header">
+            <div>
+                <h2 id="drawer-name" style="color: var(--text-heading); font-size: 1.3rem;">Contributor Name</h2>
+                <div id="drawer-handle" style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted);">@handle</div>
+            </div>
+            <button class="drawer-close" onclick="closeContributorDrawer()" aria-label="Close">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+
+        <!-- CONTRIBUTOR VISUAL PIE CHART -->
+        <div style="background: var(--surface-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem;">
+            <div style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; margin-bottom: 0.75rem;">Contribution Breakdown</div>
+            <div style="display: flex; align-items: center; justify-content: space-around;">
+                <div id="drawer-chart-container">
+                    <!-- Dynamic SVG Pie inserted by JS -->
+                </div>
+                <div id="drawer-chart-legend" style="font-size: 0.8rem; line-height: 1.8;">
+                    <!-- Legend inserted by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- IN-FLIGHT TASK -->
+        <div id="drawer-inflight-container">
+            <!-- Inflight task inserted by JS -->
+        </div>
+
+        <!-- PROJECTS TOUCHED -->
+        <div>
+            <div style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; margin-bottom: 0.5rem;">Projects Touched</div>
+            <div id="drawer-projects-list" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                <!-- Project badges inserted by JS -->
+            </div>
+        </div>
+
+        <!-- RECENT AUDIT TIMELINE -->
+        <div>
+            <div style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; margin-bottom: 0.75rem;">Change History & Audit Trail</div>
+            <div id="drawer-timeline-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <!-- Events inserted by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- CLIENT JAVASCRIPT -->
+    <script>
+        const contributorsData = __CONTRIBUTORS_JSON__;
+        const projectsData = __PROJECTS_JSON__;
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.view-panel').forEach(el => el.classList.remove('active-view'));
+
+            const navEl = document.getElementById('nav-' + tabId);
+            const viewEl = document.getElementById('view-' + tabId);
+            if (navEl) navEl.classList.add('active');
+            if (viewEl) viewEl.classList.add('active-view');
+
+            // Update URL without triggering scroll jump or browser repaint flash
+            if (window.history && window.history.replaceState) {
+                window.history.replaceState(null, null, '#' + tabId);
+            }
+        }
+
+        // Handle URL hash on load
+        window.addEventListener('DOMContentLoaded', () => {
+            const hash = window.location.hash.replace('#', '');
+            if (hash && ['fleet', 'workspace', 'contributors', 'activity', 'mcp'].includes(hash)) {
+                switchTab(hash);
+            }
+        });
+
+        function openContributorDrawer(contributorId) {
+            const c = contributorsData.find(item => item.id === contributorId || item.display_name === contributorId);
+            if (!c) return;
+
+            document.getElementById('drawer-name').textContent = c.display_name;
+            document.getElementById('drawer-handle').textContent = '@' + c.git_alias;
+
+            // Render In-Flight task
+            const inflightEl = document.getElementById('drawer-inflight-container');
+            if (c.in_flight_relay) {
+                inflightEl.innerHTML = `
+                    <div style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 0.85rem 1rem;">
+                        <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--accent);">Active In-Flight Handoff</div>
+                        <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-heading); margin-top: 0.25rem;">${c.in_flight_relay}</div>
+                    </div>
+                `;
+            } else {
+                inflightEl.innerHTML = `
+                    <div style="background: var(--surface-elevated); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-muted);">
+                        No active relay claimed. Contributor is available for handoffs.
+                    </div>
+                `;
+            }
+
+            // Render SVG Pie Chart
+            const total = (c.decisions_count + c.discoveries_count + c.notes_count + c.relays_authored) || 1;
+            const dPct = (c.decisions_count / total) * 100;
+            const discPct = (c.discoveries_count / total) * 100;
+            const nPct = (c.notes_count / total) * 100;
+            const rPct = (c.relays_authored / total) * 100;
+
+            const chartContainer = document.getElementById('drawer-chart-container');
+            chartContainer.innerHTML = `
+                <svg width="120" height="120" viewBox="0 0 42 42">
+                    <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#232d3d" stroke-width="6"></circle>
+                    <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#38bdf8" stroke-width="6" stroke-dasharray="${dPct} ${100 - dPct}" stroke-dashoffset="25"></circle>
+                    <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#fbbf24" stroke-width="6" stroke-dasharray="${discPct} ${100 - discPct}" stroke-dashoffset="${25 - dPct}"></circle>
+                    <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#34d399" stroke-width="6" stroke-dasharray="${rPct} ${100 - rPct}" stroke-dashoffset="${25 - dPct - discPct}"></circle>
+                </svg>
+            `;
+
+            const legendContainer = document.getElementById('drawer-chart-legend');
+            legendContainer.innerHTML = `
+                <div><span style="color: #38bdf8; font-weight: 700;">&bull;</span> Decisions: <strong>${c.decisions_count}</strong></div>
+                <div><span style="color: #fbbf24; font-weight: 700;">&bull;</span> Discoveries: <strong>${c.discoveries_count}</strong></div>
+                <div><span style="color: #34d399; font-weight: 700;">&bull;</span> Relays: <strong>${c.relays_authored}</strong></div>
+                <div><span style="color: #64748b; font-weight: 700;">&bull;</span> Notes: <strong>${c.notes_count}</strong></div>
+            `;
+
+            // Render Projects List
+            const projectsEl = document.getElementById('drawer-projects-list');
+            projectsEl.innerHTML = c.projects.map(p => `
+                <span class="badge badge-accent" style="font-size: 0.8rem; padding: 0.3rem 0.7rem;">${p}</span>
+            `).join('');
+
+            // Render Change History
+            const timelineEl = document.getElementById('drawer-timeline-list');
+            if (!c.recent_events || c.recent_events.length === 0) {
+                timelineEl.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">No specific decisions or file touches recorded yet.</div>';
+            } else {
+                timelineEl.innerHTML = c.recent_events.map(ev => `
+                    <div style="background: var(--surface-elevated); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                            <span class="badge badge-decision">${ev.kind}</span>
+                            <span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted);">${ev.timestamp.substring(0, 19).replace('T', ' ')}</span>
+                        </div>
+                        <div style="font-size: 0.88rem; color: var(--text-heading);">${ev.summary}</div>
+                        ${ev.files && ev.files.length ? `
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.4rem;">
+                                ${ev.files.map(f => `<span class="file-pill">${f}</span>`).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+            }
+
+            document.getElementById('contributor-overlay').classList.add('active');
+            document.getElementById('contributor-drawer').classList.add('active');
+        }
+
+        function closeContributorDrawer() {
+            document.getElementById('contributor-overlay').classList.remove('active');
+            document.getElementById('contributor-drawer').classList.remove('active');
+        }
+
+        function handleSearch(query) {
+            const q = query.toLowerCase().trim();
+
+            // Filter project cards
+            document.querySelectorAll('.project-card').forEach(card => {
+                const text = card.textContent.toLowerCase();
+                card.style.display = (!q || text.includes(q)) ? 'block' : 'none';
+            });
+
+            // Filter contributor cards
+            document.querySelectorAll('.contributor-card').forEach(card => {
+                const text = card.textContent.toLowerCase();
+                card.style.display = (!q || text.includes(q)) ? 'block' : 'none';
+            });
+
+            // Filter activity rows
+            document.querySelectorAll('.activity-row').forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = (!q || text.includes(q)) ? 'grid' : 'none';
+            });
+        }
+    </script>
+</body>
+</html>

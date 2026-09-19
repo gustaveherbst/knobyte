@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 480" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0f19" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="cyanBlue" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+    <linearGradient id="emeraldCyan" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.4" />
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1000" height="480" rx="12" fill="url(#bgGrad)" stroke="#1e293b" stroke-width="1.5" />
+
+  <!-- Title Badge -->
+  <rect x="360" y="24" width="280" height="34" rx="17" fill="#1e293b" stroke="#334155" stroke-width="1" />
+  <text x="500" y="46" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="600" fill="#38bdf8" text-anchor="middle">Git as the Canonical Sharing Layer</text>
+
+  <!-- Checkout A (Left Card) -->
+  <g transform="translate(40, 85)" filter="url(#shadow)">
+    <rect width="260" height="340" rx="10" fill="#111827" stroke="#1f2937" stroke-width="1.5" />
+    <rect x="0" y="0" width="260" height="45" rx="10" fill="#1f2937" />
+    <text x="20" y="28" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="#f8fafc">Checkout A (Alex)</text>
+    <rect x="180" y="14" width="65" height="18" rx="9" fill="#0369a1" />
+    <text x="212" y="27" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#e0f2fe" text-anchor="middle">AUTHOR</text>
+
+    <!-- Content items -->
+    <rect x="16" y="60" width="228" height="60" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1" />
+    <text x="26" y="82" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#38bdf8">Alex &amp; Coding Agent</text>
+    <text x="26" y="104" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Refactors code, records decisions</text>
+
+    <rect x="16" y="135" width="228" height="85" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1" />
+    <text x="26" y="157" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#10b981">Local Ephemeral Store</text>
+    <text x="26" y="177" font-family="monospace" font-size="11" fill="#cbd5e1">.knobyte/graph.db (SQLite)</text>
+    <text x="26" y="195" font-family="monospace" font-size="11" fill="#cbd5e1">.knobyte/wiki.db  (FTS5)</text>
+    <text x="26" y="213" font-family="monospace" font-size="11" fill="#cbd5e1">.knobyte/cozo.db  (Vectors)</text>
+
+    <rect x="16" y="235" width="228" height="75" rx="6" fill="#0f172a" stroke="#0284c7" stroke-width="1" />
+    <text x="26" y="257" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#38bdf8">Canonical Memory Updates</text>
+    <text x="26" y="277" font-family="monospace" font-size="11" fill="#93c5fd">.knobyte/relays/draft.json</text>
+    <text x="26" y="295" font-family="monospace" font-size="11" fill="#93c5fd">.knobyte/context/specs.md</text>
+  </g>
+
+  <!-- Arrow A -> Remote -->
+  <path d="M 310 250 L 385 250" fill="none" stroke="url(#cyanBlue)" stroke-width="2.5" stroke-dasharray="6,4" />
+  <polygon points="385,245 397,250 385,255" fill="#3b82f6" />
+  <rect x="315" y="218" width="70" height="20" rx="4" fill="#1e293b" />
+  <text x="350" y="232" font-family="system-ui, sans-serif" font-size="10" font-weight="600" fill="#38bdf8" text-anchor="middle">git push</text>
+
+  <!-- Remote Git Repo (Center Card) -->
+  <g transform="translate(400, 100)" filter="url(#shadow)">
+    <rect width="200" height="310" rx="10" fill="#1e1e2e" stroke="#4f46e5" stroke-width="1.5" />
+    <rect x="0" y="0" width="200" height="45" rx="10" fill="#312e81" />
+    <text x="100" y="28" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="#e0e7ff" text-anchor="middle">Remote Git Repository</text>
+
+    <!-- Git Branch / Commits -->
+    <circle cx="40" cy="80" r="8" fill="#6366f1" />
+    <line x1="40" y1="88" x2="40" y2="250" stroke="#4338ca" stroke-width="3" />
+    <circle cx="40" cy="140" r="8" fill="#38bdf8" />
+    <circle cx="40" cy="200" r="8" fill="#10b981" />
+    <circle cx="40" cy="260" r="8" fill="#f59e0b" />
+
+    <text x="60" y="85" font-family="monospace" font-size="11" fill="#cbd5e1">commit 8a1b</text>
+    <text x="60" y="145" font-family="monospace" font-size="11" fill="#cbd5e1">relay: update</text>
+    <text x="60" y="205" font-family="monospace" font-size="11" fill="#cbd5e1">spec: auth.md</text>
+    <text x="60" y="265" font-family="monospace" font-size="11" fill="#cbd5e1">HEAD -> main</text>
+  </g>
+
+  <!-- Arrow Remote -> Checkout B -->
+  <path d="M 610 250 L 685 250" fill="none" stroke="url(#emeraldCyan)" stroke-width="2.5" stroke-dasharray="6,4" />
+  <polygon points="685,245 697,250 685,255" fill="#10b981" />
+  <rect x="618" y="218" width="65" height="20" rx="4" fill="#1e293b" />
+  <text x="650" y="232" font-family="system-ui, sans-serif" font-size="10" font-weight="600" fill="#34d399" text-anchor="middle">git pull</text>
+
+  <!-- Checkout B (Right Card) -->
+  <g transform="translate(700, 85)" filter="url(#shadow)">
+    <rect width="260" height="340" rx="10" fill="#111827" stroke="#1f2937" stroke-width="1.5" />
+    <rect x="0" y="0" width="260" height="45" rx="10" fill="#1f2937" />
+    <text x="20" y="28" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="#f8fafc">Checkout B (Sam)</text>
+    <rect x="175" y="14" width="70" height="18" rx="9" fill="#065f46" />
+    <text x="210" y="27" font-family="system-ui, sans-serif" font-size="10" font-weight="700" fill="#d1fae5" text-anchor="middle">CONTINUE</text>
+
+    <!-- Content items -->
+    <rect x="16" y="60" width="228" height="60" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1" />
+    <text x="26" y="82" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#34d399">Sam &amp; Coding Agent</text>
+    <text x="26" y="104" font-family="system-ui, sans-serif" font-size="11" fill="#94a3b8">Receives Relay, resumes work</text>
+
+    <rect x="16" y="135" width="228" height="85" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1" />
+    <text x="26" y="157" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#10b981">Local Ephemeral Store</text>
+    <text x="26" y="177" font-family="monospace" font-size="11" fill="#cbd5e1">.knobyte/graph.db (rebuilt)</text>
+    <text x="26" y="195" font-family="monospace" font-size="11" fill="#cbd5e1">.knobyte/wiki.db  (rebuilt)</text>
+    <text x="26" y="213" font-family="monospace" font-size="11" fill="#cbd5e1">.knobyte/cozo.db  (rebuilt)</text>
+
+    <rect x="16" y="235" width="228" height="75" rx="6" fill="#0f172a" stroke="#059669" stroke-width="1" />
+    <text x="26" y="257" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#34d399">Canonical Memory Consumed</text>
+    <text x="26" y="277" font-family="monospace" font-size="11" fill="#a7f3d0">claims relay: 8a1b</text>
+    <text x="26" y="295" font-family="monospace" font-size="11" fill="#a7f3d0">reads full architectural context</text>
+  </g>
+</svg>

@@ -1,0 +1,21 @@
+pub mod capabilities;
+pub mod config;
+pub mod cozo;
+pub mod doctor;
+pub mod drift;
+pub mod events;
+pub mod graph;
+pub mod harvest;
+pub mod heartbeat;
+pub mod hub;
+pub mod mcp;
+pub mod progress;
+pub mod setup;
+pub mod skills;
+pub mod team;
+pub mod version;
+pub mod wiki;
+
+pub use config::{find_config, KnobyteConfig};
+pub use progress::{format_bytes, IndexProgressBar};
+pub use version::VERSION;
